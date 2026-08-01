@@ -83,7 +83,7 @@ export async function GET(request: Request) {
       const users = await prisma.user.findMany({
         where: {
           isDeleted: false,
-          status: { in: ["ACTIVE", "PENDING"] },
+          status: "ACTIVE",
           OR: orConditions
         },
         select: {
@@ -261,7 +261,7 @@ export async function GET(request: Request) {
       prisma.user.findMany({
         where: {
           isDeleted: isDeletedFilter,
-          status: { in: ["ACTIVE", "PENDING"] },
+          status: "ACTIVE",
           role: { in: ["ADMIN", "USER"] },
           OR: adminOrConditions,
         },
