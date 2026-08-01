@@ -43,6 +43,7 @@ interface TrashedLead {
   status: string;
   leadSource?: string;
   createdAt: string;
+  deletedAt?: string;
   user?: { name: string; email: string };
 }
 
@@ -123,14 +124,13 @@ export default function AdminArchivePage() {
         setTrashedUsers(usersData.allUsers.filter((u: any) => u.isDeleted));
       }
 
-      // Fetch leads (won/lost or archived leads) — company-scoped for ADMIN via RLS
-      const leadsRes = await fetch("/api/leads", {
+      // Fetch soft-deleted (trashed) leads — company-scoped for ADMIN via RLS
+      const leadsRes = await fetch("/api/leads?trash=true", {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       const leadsData = await leadsRes.json();
       if (Array.isArray(leadsData)) {
-        // Show leads with status WON or LOST in archive tab
-        setTrashedLeads(leadsData.filter((l: any) => l.status === "LOST" || l.status === "WON"));
+        setTrashedLeads(leadsData);
       }
 
       // Archived companies — Super Admin only
@@ -212,11 +212,11 @@ export default function AdminArchivePage() {
       const res = await fetch(`/api/leads/${l.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token()}` },
-        body: JSON.stringify({ status: "NEW" }),
+        body: JSON.stringify({ isDeleted: false }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to restore lead");
-      showToast(`Lead "${l.firstName} ${l.lastName}" reactivated to NEW`, "success");
+      showToast(`Lead "${l.firstName} ${l.lastName}" restored from trash`, "success");
       fetchTrashedItems();
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Error restoring lead", "error");
@@ -228,7 +228,7 @@ export default function AdminArchivePage() {
   async function handlePermanentDeleteLead(l: TrashedLead) {
     setActionLoadingId(l.id);
     try {
-      const res = await fetch(`/api/leads/${l.id}`, {
+      const res = await fetch(`/api/leads/${l.id}?permanent=true`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token()}` },
       });
@@ -619,7 +619,8 @@ export default function AdminArchivePage() {
                   <tr className="border-b border-nexus-border text-[11px] uppercase text-nexus-muted font-semibold bg-nexus-bg/50">
                     <th className="p-4">Lead Name</th>
                     <th className="p-4">Company</th>
-                    <th className="p-4">Status</th>
+                    <th className="p-4">Created Date</th>
+                    <th className="p-4">Trashed Date</th>
                     <th className="p-4">Assigned To</th>
                     <th className="p-4 text-right">Actions</th>
                   </tr>
@@ -627,15 +628,15 @@ export default function AdminArchivePage() {
                 <tbody className="divide-y divide-nexus-border">
                   {loading && (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-nexus-muted text-xs">
-                        Loading archived leads…
+                      <td colSpan={6} className="p-8 text-center text-nexus-muted text-xs">
+                        Loading trashed leads…
                       </td>
                     </tr>
                   )}
                   {!loading && filteredLeads.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="p-12 text-center text-nexus-muted text-xs italic">
-                        No archived leads found matching your search.
+                      <td colSpan={6} className="p-12 text-center text-nexus-muted text-xs italic">
+                        No trashed leads found matching your search.
                       </td>
                     </tr>
                   )}
@@ -649,17 +650,8 @@ export default function AdminArchivePage() {
                           <p className="text-xs text-nexus-muted">{l.email}</p>
                         </td>
                         <td className="p-4 text-nexus-muted text-xs">{l.company || "—"}</td>
-                        <td className="p-4">
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                              l.status === "WON"
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                : "bg-red-500/10 text-red-400 border-red-500/20"
-                            }`}
-                          >
-                            {l.status}
-                          </span>
-                        </td>
+                        <td className="p-4 text-nexus-muted text-xs">{formatDate(l.createdAt)}</td>
+                        <td className="p-4 text-nexus-muted text-xs">{formatDate(l.deletedAt)}</td>
                         <td className="p-4 text-nexus-muted text-xs">
                           {l.user ? l.user.name : "Unassigned"}
                         </td>
@@ -669,14 +661,14 @@ export default function AdminArchivePage() {
                               onClick={() => handleRestoreLead(l)}
                               disabled={actionLoadingId === l.id}
                               className="px-3 py-1.5 text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 transition-colors flex items-center gap-1.5"
-                              title="Reactivate Lead"
+                              title="Restore Lead from Trash"
                             >
                               {actionLoadingId === l.id ? (
                                 <IconLoader2 size={14} className="animate-spin" />
                               ) : (
                                 <IconUserCheck size={14} />
                               )}
-                              Reactivate
+                              Restore
                             </button>
 
                             {isSuperAdmin && (

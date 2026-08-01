@@ -545,9 +545,6 @@ export default function UserManagementPage() {
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
   const [confirmSoftDeleteUser, setConfirmSoftDeleteUser] = useState<AppUser | null>(null);
   const [confirmToggleStatusUser, setConfirmToggleStatusUser] = useState<AppUser | null>(null);
-  const [showTrashModal, setShowTrashModal] = useState(false);
-  const [trashedUsers, setTrashedUsers] = useState<AppUser[]>([]);
-  const [trashLoading, setTrashLoading] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -777,31 +774,7 @@ export default function UserManagementPage() {
     return compNameMatch || hasAnyMatches;
   });
 
-  // ── Soft Delete & Trash Helpers ──────────────────────────────────────────
-
-  const fetchTrashedUsers = useCallback(async () => {
-    setTrashLoading(true);
-    try {
-      const token = localStorage.getItem("nexus-token");
-      const res = await fetch("/api/users?deleted=true", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setTrashedUsers(data);
-      } else if (data.allUsers && Array.isArray(data.allUsers)) {
-        setTrashedUsers(data.allUsers.filter((u: any) => u.isDeleted));
-      }
-    } catch (_) {
-    } finally {
-      setTrashLoading(false);
-    }
-  }, []);
-
-  function openTrashModal() {
-    setShowTrashModal(true);
-    fetchTrashedUsers();
-  }
+  // ── Soft Delete Helper ────────────────────────────────────────────────────
 
   async function handleSoftDeleteUser(u: AppUser) {
     setActionLoading(true);
@@ -816,50 +789,8 @@ export default function UserManagementPage() {
       showToast(`"${u.name}" moved to Trash / Archive`, "success");
       setConfirmSoftDeleteUser(null);
       fetchData(true);
-      fetchTrashedUsers();
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Error soft deleting user", "error");
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
-  async function handleRestoreUser(u: AppUser) {
-    setActionLoading(true);
-    try {
-      const token = localStorage.getItem("nexus-token");
-      const res = await fetch(`/api/users/${u.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: "restore" }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to restore user");
-      showToast(`"${u.name}" restored successfully`, "success");
-      fetchTrashedUsers();
-      fetchData(true);
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : "Error restoring user", "error");
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
-  async function handlePermanentDelete(u: AppUser) {
-    setActionLoading(true);
-    try {
-      const token = localStorage.getItem("nexus-token");
-      const res = await fetch(`/api/users/${u.id}?hard=true`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to permanently delete user");
-      showToast(`"${u.name}" permanently deleted`, "success");
-      fetchTrashedUsers();
-      fetchData(true);
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : "Error deleting user", "error");
     } finally {
       setActionLoading(false);
     }
@@ -1513,98 +1444,6 @@ export default function UserManagementPage() {
         </div>
       )}
 
-      {/* Trash / Archive Modal */}
-      {showTrashModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-nexus-card border border-nexus-border rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-nexus-border">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-red-500/10 text-red-400">
-                  <IconTrash size={20} />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-nexus-text">Archive</h2>
-                  <p className="text-xs text-nexus-muted">
-                    {isAdmin ? "Deleted users for your admin account" : "All soft-deleted accounts"}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowTrashModal(false)}
-                className="p-2 text-nexus-muted hover:text-nexus-text hover:bg-nexus-hover rounded-lg transition-colors"
-              >
-                <IconX size={18} />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto flex-1 space-y-4">
-              {trashLoading ? (
-                <div className="p-8 text-center text-xs text-nexus-muted">Loading trashed users…</div>
-              ) : trashedUsers.length === 0 ? (
-                <div className="p-12 text-center text-nexus-muted italic text-xs border border-dashed border-nexus-border rounded-xl">
-                  No trashed or deleted users found.
-                </div>
-              ) : (
-                <div className="border border-nexus-border rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-nexus-border text-[11px] uppercase text-nexus-muted font-semibold bg-nexus-bg/40">
-                        <th className="p-3 pl-4">User</th>
-                        <th className="p-3">Company</th>
-                        <th className="p-3">Deleted Date</th>
-                        <th className="p-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-nexus-border text-xs">
-                      {trashedUsers.map((u) => (
-                        <tr key={u.id} className="hover:bg-nexus-hover/30">
-                          <td className="p-3 pl-4">
-                            <p className="font-semibold text-nexus-text">{u.name}</p>
-                            <p className="text-[11px] text-nexus-muted">{u.email}</p>
-                          </td>
-                          <td className="p-3 text-nexus-muted">{u.company || u.department || "—"}</td>
-                          <td className="p-3 text-nexus-muted">
-                            {(u as any).deletedAt ? formatDate((u as any).deletedAt) : "Archived"}
-                          </td>
-                          <td className="p-3">
-                            <div className="flex items-center gap-2 justify-end">
-                              <button
-                                onClick={() => handleRestoreUser(u)}
-                                disabled={actionLoading}
-                                className="px-2.5 py-1 text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md hover:bg-emerald-500/20 transition-colors flex items-center gap-1"
-                                title="Restore User"
-                              >
-                                <IconRefresh size={12} /> Restore
-                              </button>
-                              <button
-                                onClick={() => handlePermanentDelete(u)}
-                                disabled={actionLoading}
-                                className="px-2.5 py-1 text-[11px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 rounded-md hover:bg-red-500/20 transition-colors flex items-center gap-1"
-                                title="Permanently Delete"
-                              >
-                                <IconX size={12} /> Delete
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end px-6 py-3 border-t border-nexus-border">
-              <button
-                onClick={() => setShowTrashModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-nexus-muted border border-nexus-border rounded-lg hover:bg-nexus-hover"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

@@ -116,9 +116,6 @@ export default function AdminManagementPage() {
   const [confirmDeactivate, setConfirmDeactivate] = useState<AdminUser | null>(null);
   const [confirmActivate, setConfirmActivate] = useState<AdminUser | null>(null);
   const [confirmSoftDeleteAdmin, setConfirmSoftDeleteAdmin] = useState<AdminUser | null>(null);
-  const [showTrashModal, setShowTrashModal] = useState(false);
-  const [trashedAdmins, setTrashedAdmins] = useState<AdminUser[]>([]);
-  const [trashLoading, setTrashLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Admin Form state
@@ -175,73 +172,11 @@ export default function AdminManagementPage() {
     }
   }, []);
 
-  const fetchTrashedAdmins = useCallback(async () => {
-    setTrashLoading(true);
-    try {
-      const res = await fetch("/api/users?deleted=true", {
-        headers: { Authorization: `Bearer ${token()}` },
-      });
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setTrashedAdmins(data);
-      } else if (data.allUsers && Array.isArray(data.allUsers)) {
-        setTrashedAdmins(data.allUsers.filter((u: any) => u.isDeleted));
-      }
-    } catch (_) {
-    } finally {
-      setTrashLoading(false);
-    }
-  }, []);
-
-  function openTrashModal() {
-    setShowTrashModal(true);
-    fetchTrashedAdmins();
-  }
-
-  async function handleRestoreAdmin(a: AdminUser) {
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/users/${a.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token()}` },
-        body: JSON.stringify({ action: "restore" }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to restore account");
-      toast$(`"${a.name}" restored successfully`, "success");
-      fetchTrashedAdmins();
-      loadAll(true);
-    } catch (e) {
-      toast$(e instanceof Error ? e.message : "Error restoring account", "error");
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
-  async function handlePermanentDeleteAdmin(a: AdminUser) {
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/users/${a.id}?hard=true`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token()}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to delete account");
-      toast$(`"${a.name}" permanently deleted`, "success");
-      fetchTrashedAdmins();
-      loadAll(true);
-    } catch (e) {
-      toast$(e instanceof Error ? e.message : "Error deleting account", "error");
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
   const loadAll = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    await Promise.all([fetchAdmins(), fetchCompanies(), fetchTrashedAdmins()]);
+    await Promise.all([fetchAdmins(), fetchCompanies()]);
     if (!silent) setLoading(false);
-  }, [fetchAdmins, fetchCompanies, fetchTrashedAdmins]);
+  }, [fetchAdmins, fetchCompanies]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -1115,99 +1050,6 @@ export default function AdminManagementPage() {
             </div>
           </div>
         )}
-
-      {/* Trash / Archive Modal */}
-      {showTrashModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-nexus-card border border-nexus-border rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-nexus-border">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-red-500/10 text-red-400">
-                  <IconTrash size={20} />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-nexus-text">Archive</h2>
-                  <p className="text-xs text-nexus-muted">Deleted users and admin accounts</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowTrashModal(false)}
-                className="p-2 text-nexus-muted hover:text-nexus-text hover:bg-nexus-hover rounded-lg transition-colors"
-              >
-                <IconX size={18} />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto flex-1 space-y-4">
-              {trashLoading ? (
-                <div className="p-8 text-center text-xs text-nexus-muted">Loading trashed items…</div>
-              ) : trashedAdmins.length === 0 ? (
-                <div className="p-12 text-center text-nexus-muted italic text-xs border border-dashed border-nexus-border rounded-xl">
-                  No trashed or deleted accounts found.
-                </div>
-              ) : (
-                <div className="border border-nexus-border rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-nexus-border text-[11px] uppercase text-nexus-muted font-semibold bg-nexus-bg/40">
-                        <th className="p-3 pl-4">Account</th>
-                        <th className="p-3">Role</th>
-                        <th className="p-3">Company</th>
-                        <th className="p-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-nexus-border text-xs">
-                      {trashedAdmins.map((a) => (
-                        <tr key={a.id} className="hover:bg-nexus-hover/30">
-                          <td className="p-3 pl-4">
-                            <p className="font-semibold text-nexus-text">{a.name || "—"}</p>
-                            <p className="text-[11px] text-nexus-muted">{a.email}</p>
-                          </td>
-                          <td className="p-3">
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-orange-500/20 bg-orange-500/10 text-orange-400">
-                              {a.role}
-                            </span>
-                          </td>
-                          <td className="p-3 text-nexus-muted">{a.company || a.department || "—"}</td>
-                          <td className="p-3">
-                            <div className="flex items-center gap-2 justify-end">
-                              <button
-                                onClick={() => handleRestoreAdmin(a)}
-                                disabled={actionLoading}
-                                className="px-2.5 py-1 text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md hover:bg-emerald-500/20 transition-colors flex items-center gap-1"
-                                title="Restore Account"
-                              >
-                                <IconRefresh size={12} /> Restore
-                              </button>
-                              <button
-                                onClick={() => handlePermanentDeleteAdmin(a)}
-                                disabled={actionLoading}
-                                className="px-2.5 py-1 text-[11px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 rounded-md hover:bg-red-500/20 transition-colors flex items-center gap-1"
-                                title="Permanently Delete"
-                              >
-                                <IconX size={12} /> Delete
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end px-6 py-3 border-t border-nexus-border">
-              <button
-                onClick={() => setShowTrashModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-nexus-muted border border-nexus-border rounded-lg hover:bg-nexus-hover"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       </div>
     </PermissionGuard>

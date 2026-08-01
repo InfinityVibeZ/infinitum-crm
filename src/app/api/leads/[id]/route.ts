@@ -112,6 +112,7 @@ export async function PUT(
       followUps,
       probability,
       expectedCloseDate,
+      isDeleted,
     } = body;
 
     // Handle follow-ups updates if provided
@@ -179,6 +180,7 @@ export async function PUT(
         ...(userId !== undefined && { userId: userId || payload.userId }),
         ...(probability !== undefined && { probability: parseInt(probability || "0") }),
         ...(expectedCloseDate !== undefined && { expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null }),
+        ...(isDeleted !== undefined && { isDeleted, deletedAt: isDeleted ? new Date() : null }),
       },
       include: {
         user: {
