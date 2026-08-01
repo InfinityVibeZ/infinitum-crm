@@ -283,21 +283,7 @@ export default function LeadsCRMPage() {
     const admins = adminUsers.filter((u) => assigneeIds.has(u.id));
     const team = teamUsers.filter((u) => assigneeIds.has(u.id));
 
-    const otherAssignees: { id: string; name: string }[] = [];
-    leads.forEach((l) => {
-      const uId = l.user?.id || l.userId;
-      const uName = l.user?.name || l.userName;
-      if (
-        uId &&
-        !admins.some((a) => a.id === uId) &&
-        !team.some((t) => t.id === uId) &&
-        !otherAssignees.some((o) => o.id === uId)
-      ) {
-        otherAssignees.push({ id: uId, name: uName || "Assigned User" });
-      }
-    });
-
-    return { admins, team, otherAssignees };
+    return { admins, team };
   }, [leads, adminUsers, teamUsers]);
 
   // Helper: Indian Currency Formatter
@@ -884,15 +870,6 @@ export default function LeadsCRMPage() {
               {availableAssignees.team.length > 0 && (
                 <optgroup label="Users">
                   {availableAssignees.team.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {availableAssignees.otherAssignees.length > 0 && (
-                <optgroup label="Other Assignees">
-                  {availableAssignees.otherAssignees.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name}
                     </option>
