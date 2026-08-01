@@ -1358,7 +1358,7 @@ export default function LeadsCRMPage() {
 
                                     {/* 4. Delete Lead */}
                                     <button
-                                      onClick={() => setDeletingLead(lead)}
+                                      onClick={() => handleDeleteClick(lead)}
                                       className="p-1.5 text-nexus-muted hover:text-red-400 hover:bg-nexus-hover rounded-lg transition-colors"
                                       title="Delete Lead"
                                     >
