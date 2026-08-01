@@ -60,6 +60,7 @@ export function LeadModal({
   const [priority, setPriority] = useState("MEDIUM");
   const [status, setStatus] = useState("NEW");
   const [revenueGenerated, setRevenueGenerated] = useState("0");
+  const [leadCreatedDate, setLeadCreatedDate] = useState("");
   const [expectedCloseDate, setExpectedCloseDate] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -124,6 +125,11 @@ export function LeadModal({
       setPriority(leadData.priority || "MEDIUM");
       setStatus(leadData.status || "NEW");
       setRevenueGenerated(leadData.revenueGenerated?.toString() || "0");
+      setLeadCreatedDate(
+        leadData.createdAt
+          ? new Date(leadData.createdAt).toISOString().split("T")[0]
+          : ""
+      );
       setExpectedCloseDate(
         leadData.expectedCloseDate
           ? new Date(leadData.expectedCloseDate).toISOString().split("T")[0]
@@ -144,6 +150,7 @@ export function LeadModal({
       setPriority("MEDIUM");
       setStatus("NEW");
       setRevenueGenerated("0");
+      setLeadCreatedDate("");
       setExpectedCloseDate("");
       setNotes("");
     }
@@ -389,15 +396,14 @@ export function LeadModal({
                   }`}
                 >
                   <option value="">Select Source...</option>
-                  <option value="Facebook">Facebook</option>
                   <option value="WEBSITE">Website</option>
                   <option value="REFERRAL">Referral</option>
                   <option value="LINKEDIN">LinkedIn</option>
-                  <option value="Cold Call">Cold Call</option>
-                  <option value="Instagram">Instagram</option>
-                  <option value="Google Ads">Google Ads</option>
-                  <option value="WhatsApp">WhatsApp</option>
-                  <option value="Direct">Direct / Other</option>
+                  <option value="COLD_CALL">Cold Call</option>
+                  <option value="COLD_EMAIL">Cold Email</option>
+                  <option value="ADVERTISING">Advertising / Social Media</option>
+                  <option value="EVENT">Event</option>
+                  <option value="OTHER">Other</option>
                 </select>
               </div>
               <div>
@@ -501,23 +507,42 @@ export function LeadModal({
               </div>
             </div>
 
-            {/* Row 3: Expected Close Date */}
-            <div>
-              <label className="block text-xs font-medium text-nexus-text-secondary mb-1">
-                Expected Close Date
-              </label>
-              <input
-                type="date"
-                disabled={isReadOnly}
-                value={expectedCloseDate}
-                onChange={(e) => setExpectedCloseDate(e.target.value)}
-                onClick={(e) => !isReadOnly && e.currentTarget.showPicker?.()}
-                className={`w-full border rounded-lg px-3 py-2 text-sm [color-scheme:dark] ${
-                  isReadOnly
-                    ? "bg-nexus-hover border-nexus-border text-nexus-muted cursor-not-allowed"
-                    : "bg-nexus-bg border-nexus-border text-nexus-text focus:outline-none focus:border-nexus-primary/50 cursor-pointer"
-                }`}
-              />
+            {/* Row 3: Lead Created Date, Expected Close Date */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-nexus-text-secondary mb-1">
+                  Lead Created Date <span className="text-nexus-muted">(Optional)</span>
+                </label>
+                <input
+                  type="date"
+                  disabled={isReadOnly}
+                  value={leadCreatedDate}
+                  onChange={(e) => setLeadCreatedDate(e.target.value)}
+                  onClick={(e) => !isReadOnly && e.currentTarget.showPicker?.()}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm [color-scheme:dark] ${
+                    isReadOnly
+                      ? "bg-nexus-hover border-nexus-border text-nexus-muted cursor-not-allowed"
+                      : "bg-nexus-bg border-nexus-border text-nexus-text focus:outline-none focus:border-nexus-primary/50 cursor-pointer"
+                  }`}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-nexus-text-secondary mb-1">
+                  Expected Close Date
+                </label>
+                <input
+                  type="date"
+                  disabled={isReadOnly}
+                  value={expectedCloseDate}
+                  onChange={(e) => setExpectedCloseDate(e.target.value)}
+                  onClick={(e) => !isReadOnly && e.currentTarget.showPicker?.()}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm [color-scheme:dark] ${
+                    isReadOnly
+                      ? "bg-nexus-hover border-nexus-border text-nexus-muted cursor-not-allowed"
+                      : "bg-nexus-bg border-nexus-border text-nexus-text focus:outline-none focus:border-nexus-primary/50 cursor-pointer"
+                  }`}
+                />
+              </div>
             </div>
 
             {/* Notes */}
