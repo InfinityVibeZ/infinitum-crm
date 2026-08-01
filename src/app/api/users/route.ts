@@ -61,6 +61,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const grouped = searchParams.get("grouped") === "true";
     const archived = searchParams.get("archived") === "true" || searchParams.get("deleted") === "true";
+    const activeOnly = searchParams.get("activeOnly") === "true";
 
     const isDeletedFilter = archived ? true : false;
 
@@ -83,7 +84,7 @@ export async function GET(request: Request) {
       const users = await prisma.user.findMany({
         where: {
           isDeleted: false,
-          status: "ACTIVE",
+          ...(activeOnly && { status: "ACTIVE" }),
           OR: orConditions
         },
         select: {
@@ -261,7 +262,7 @@ export async function GET(request: Request) {
       prisma.user.findMany({
         where: {
           isDeleted: isDeletedFilter,
-          status: "ACTIVE",
+          ...(activeOnly && { status: "ACTIVE" }),
           role: { in: ["ADMIN", "USER"] },
           OR: adminOrConditions,
         },
