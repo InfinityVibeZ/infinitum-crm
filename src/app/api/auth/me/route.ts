@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractTokenFromRequest, getTokenPayload } from "@/lib/auth";
+import { touchSession } from "@/lib/session-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,10 @@ export async function GET(request: Request) {
     const companyName = isSuper ? "" : (user.company || user.companyRef?.name || user.department || "");
     const companyIdVal = isSuper ? "" : (user.companyId || user.companyRef?.id || "");
     const categoryVal = isSuper ? "" : (user.category || user.companyRef?.category || "");
+
+    // Fire-and-forget heartbeat (internally throttled) — this endpoint is polled every
+    // 5s by IdleTimerGuard, so we never want it waiting on this write.
+    touchSession(user.id).catch((err) => console.error("touchSession failed:", err));
 
     return NextResponse.json({
       user: {

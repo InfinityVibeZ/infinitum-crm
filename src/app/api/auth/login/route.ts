@@ -3,6 +3,7 @@ import { loginUser, generateToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAuditEvent, getIpFromRequest } from "@/lib/audit";
 import { mergePermissionsForRole, getDefaultPermissionsForRole } from "@/lib/permissions";
+import { MAX_CONCURRENT_USERS, getActiveUserCount, isUserCurrentlyActive, touchSession } from "@/lib/session-limit";
 
 export async function POST(request: Request) {
   const ip = getIpFromRequest(request);
@@ -39,6 +40,30 @@ export async function POST(request: Request) {
       });
       const message = loginErr instanceof Error ? loginErr.message : "Login failed";
       return NextResponse.json({ error: message }, { status: 401 });
+    }
+
+    // Enforce the concurrent-user cap. A user who already has a fresh session
+    // (e.g. reloading the login page after already being logged in) is never
+    // blocked — only a genuinely NEW user shows up as #101.
+    if (!(await isUserCurrentlyActive(user.id))) {
+      const activeCount = await getActiveUserCount();
+      if (activeCount >= MAX_CONCURRENT_USERS) {
+        await logAuditEvent({
+          action:    "LOGIN_REJECTED_CAPACITY",
+          category:  "Authentication",
+          severity:  "WARNING",
+          actorName:  user.name || email,
+          actorEmail: email,
+          actorRole:  user.role,
+          targetName: "Login Portal",
+          summary:   `Login rejected — server at capacity (${MAX_CONCURRENT_USERS} concurrent users)`,
+          ipAddress: ip,
+        });
+        return NextResponse.json(
+          { error: "Server is currently at full capacity. Please try again after some time." },
+          { status: 429 }
+        );
+      }
     }
 
     const userRecord = await prisma.user.findUnique({
@@ -131,6 +156,8 @@ export async function POST(request: Request) {
       summary:   `${user.name || user.email} logged into the system`,
       ipAddress: ip,
     });
+
+    await touchSession(user.id);
 
     return response;
   } catch (error) {

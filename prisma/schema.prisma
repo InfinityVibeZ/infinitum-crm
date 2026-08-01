@@ -441,3 +441,13 @@ model InvitationToken {
 
   @@map("invitation_tokens")
 }
+
+/// Tracks the last time each user was seen active, used to enforce a
+/// concurrent-user cap (see src/lib/session-limit.ts). One row per user
+/// (upserted), not one row per login.
+model ActiveSession {
+  userId     String   @id @map("user_id") @db.Uuid
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+
+  @@map("active_sessions")
+}

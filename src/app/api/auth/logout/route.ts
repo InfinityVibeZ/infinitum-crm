@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { extractTokenFromRequest, getTokenPayload } from "@/lib/auth";
 import { logAuditEvent, getIpFromRequest } from "@/lib/audit";
+import { clearSession } from "@/lib/session-limit";
 
 export async function POST(request: Request) {
   const ip = getIpFromRequest(request);
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
           summary:   `${payload.name || payload.email} logged out of the system`,
           ipAddress: ip,
         });
+        // Free this user's slot immediately rather than waiting for the idle window to expire.
+        await clearSession(payload.userId);
       }
     }
   } catch {
