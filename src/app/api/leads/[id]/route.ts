@@ -111,6 +111,7 @@ export async function PUT(
       userId,
       followUps,
       probability,
+      leadCreatedDate,
       expectedCloseDate,
       isDeleted,
     } = body;
@@ -179,6 +180,7 @@ export async function PUT(
         ...(milestones !== undefined && { milestones }),
         ...(userId !== undefined && { userId: userId || payload.userId }),
         ...(probability !== undefined && { probability: parseInt(probability || "0") }),
+        ...(leadCreatedDate !== undefined && { leadCreatedDate: leadCreatedDate ? new Date(leadCreatedDate) : null }),
         ...(expectedCloseDate !== undefined && { expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null }),
         ...(isDeleted !== undefined && { isDeleted, deletedAt: isDeleted ? new Date() : null }),
       },
@@ -254,6 +256,7 @@ export async function DELETE(
 
     const { searchParams } = new URL(request.url);
     const permanent = searchParams.get("permanent") === "true";
+    const validateOnly = searchParams.get("validate") === "true";
 
     const tenantFilter = await getTenantWhereClauseAsync(payload);
 
@@ -278,7 +281,7 @@ export async function DELETE(
     if (hasRelatedData && !permanent) {
       return NextResponse.json(
         {
-          error: "Cannot delete lead with associated payments, follow-ups, or activities. Please remove these records first or permanently delete the lead.",
+          error: "Cannot delete lead with associated payments, follow-ups, or activities.",
           details: {
             payments: paymentsCount,
             followUps: followUpsCount,
@@ -287,6 +290,11 @@ export async function DELETE(
         },
         { status: 400 }
       );
+    }
+
+    // If validation-only request, return success if no related data
+    if (validateOnly) {
+      return NextResponse.json({ success: true, hasRelatedData: false });
     }
 
     if (permanent && payload.role === "SUPER_ADMIN") {

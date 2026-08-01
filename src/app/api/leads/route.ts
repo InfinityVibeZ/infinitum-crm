@@ -156,6 +156,7 @@ export async function POST(request: Request) {
       userId,
       probability,
       expectedCloseDate,
+      leadCreatedDate,
     } = body;
 
     const finalFirstName = firstName || "";
@@ -205,6 +206,7 @@ export async function POST(request: Request) {
         leadSource: toPrismaLeadSource(leadSource),
         leadType: leadType || null,
         probability: probability ? parseInt(probability) : 0,
+        leadCreatedDate: leadCreatedDate ? new Date(leadCreatedDate) : new Date(),
         expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null,
         revenueGenerated: revenueGenerated ? parseFloat(revenueGenerated) : 0,
         cashCollected: cashCollected ? parseFloat(cashCollected) : 0,

@@ -518,6 +518,26 @@ export default function LeadsCRMPage() {
     }
   };
 
+  // Check for related data before showing delete confirmation
+  const handleDeleteClick = async (lead: any) => {
+    try {
+      const res = await fetch(`/api/leads/${lead.id}?validate=true`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        // No related data found - show confirmation popup
+        setDeletingLead(lead);
+      } else {
+        const data = await res.json();
+        setErrorMessage(data.error || "Failed to delete lead");
+      }
+    } catch (err) {
+      console.error("Error validating lead delete:", err);
+      setErrorMessage("Failed to delete lead");
+    }
+  };
+
   // Soft Delete Handler
   const handleConfirmSoftDelete = async () => {
     if (!deletingLead) return;
@@ -1176,7 +1196,7 @@ export default function LeadsCRMPage() {
 
                                 {/* 4. Delete Lead (Soft Delete) */}
                                 <button
-                                  onClick={() => setDeletingLead(lead)}
+                                  onClick={() => handleDeleteClick(lead)}
                                   className="p-1.5 text-nexus-muted hover:text-red-400 hover:bg-nexus-hover rounded-lg transition-colors"
                                   title="Delete Lead"
                                 >

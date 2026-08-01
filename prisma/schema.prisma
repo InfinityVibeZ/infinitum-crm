@@ -180,6 +180,7 @@ model Lead {
   score           Int        @default(0) @db.SmallInt
   engagementScore Int        @default(0) @map("engagement_score") @db.SmallInt
   probability     Int        @default(0) @db.SmallInt
+  leadCreatedDate DateTime?   @map("lead_created_date")
   expectedCloseDate DateTime? @map("expected_close_date")
   nextFollowUpDate  DateTime? @map("next_follow_up_date")
   revenueGenerated Decimal?  @default(0) @map("revenue_generated") @db.Decimal(12, 2)

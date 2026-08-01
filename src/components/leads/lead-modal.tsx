@@ -183,6 +183,7 @@ export function LeadModal({
         priority,
         status,
         revenueGenerated: parseFloat(revenueGenerated) || 0,
+        leadCreatedDate: leadCreatedDate ? new Date(leadCreatedDate).toISOString() : undefined,
         expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate).toISOString() : undefined,
         notes,
       };
@@ -511,7 +512,7 @@ export function LeadModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-nexus-text-secondary mb-1">
-                  Lead Created Date <span className="text-nexus-muted">(Optional)</span>
+                  Lead Created Date
                 </label>
                 <input
                   type="date"
