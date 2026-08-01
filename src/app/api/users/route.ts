@@ -81,7 +81,11 @@ export async function GET(request: Request) {
       }
 
       const users = await prisma.user.findMany({
-        where: { isDeleted: false, OR: orConditions },
+        where: {
+          isDeleted: false,
+          status: { in: ["ACTIVE", "PENDING"] },
+          OR: orConditions
+        },
         select: {
           id: true, name: true, email: true, role: true, status: true, isActive: true,
           avatarUrl: true, company: true, companyId: true, department: true,
@@ -257,6 +261,7 @@ export async function GET(request: Request) {
       prisma.user.findMany({
         where: {
           isDeleted: isDeletedFilter,
+          status: { in: ["ACTIVE", "PENDING"] },
           role: { in: ["ADMIN", "USER"] },
           OR: adminOrConditions,
         },
