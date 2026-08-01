@@ -361,13 +361,13 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         }
       }
 
+      // Restore user: preserve original status, only reset isDeleted flag
       const restored = await prisma.user.update({
         where: { id: params.id },
         data: {
           isDeleted: false,
           deletedAt: null,
           isActive: true,
-          status: "ACTIVE",
         },
         select: { id: true, name: true, email: true, role: true, isActive: true, status: true, companyId: true, company: true },
       });
