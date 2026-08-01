@@ -341,11 +341,11 @@ export default function AdminManagementPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      toast$(`"${a.name}" moved to Trash / Archive`, "success");
+      toast$(`Admin "${a.name}" deleted successfully`, "success");
       setConfirmSoftDeleteAdmin(null);
       loadAll(true);
     } catch (e) {
-      toast$(e instanceof Error ? e.message : "Error archiving admin", "error");
+      toast$(e instanceof Error ? e.message : "Error deleting admin", "error");
     } finally {
       setActionLoading(false);
     }
@@ -850,7 +850,7 @@ export default function AdminManagementPage() {
                   <IconTrash size={24} className="text-amber-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-nexus-text">Move Admin to Trash?</h3>
+                  <h3 className="text-lg font-bold text-nexus-text">Delete Admin?</h3>
                   <p className="text-base font-bold text-nexus-text mt-2">{confirmSoftDeleteAdmin.name}</p>
                 </div>
               </div>
@@ -864,7 +864,7 @@ export default function AdminManagementPage() {
                   className="flex-1 px-4 py-2.5 text-sm font-bold bg-amber-500 text-black rounded-xl hover:bg-amber-400 shadow-lg shadow-amber-500/25 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   {actionLoading && <IconLoader2 size={16} className="animate-spin" />}
-                  {actionLoading ? "Processing…" : "Move to Trash"}
+                  {actionLoading ? "Processing…" : "Delete"}
                 </button>
               </div>
             </div>

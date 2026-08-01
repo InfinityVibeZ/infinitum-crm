@@ -215,11 +215,11 @@ export default function CompanyManagementPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      toast$(`Company "${c.name}" moved to Trash / Archive`, "success");
+      toast$(`Company "${c.name}" deleted successfully`, "success");
       setConfirmSoftDelete(null);
       fetchCompanies(true);
     } catch (e) {
-      toast$(e instanceof Error ? e.message : "Error archiving company", "error");
+      toast$(e instanceof Error ? e.message : "Error deleting company", "error");
     } finally {
       setActionLoading(false);
     }
@@ -635,7 +635,7 @@ export default function CompanyManagementPage() {
                   <IconTrash size={24} className="text-amber-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-nexus-text">Move Company to Trash?</h3>
+                  <h3 className="text-lg font-bold text-nexus-text">Delete Company?</h3>
                   <p className="text-base font-bold text-nexus-text mt-2">{confirmSoftDelete.name}</p>
                 </div>
               </div>
@@ -649,7 +649,7 @@ export default function CompanyManagementPage() {
                   className="flex-1 px-4 py-2.5 text-sm font-bold bg-amber-500 text-black rounded-xl hover:bg-amber-400 shadow-lg shadow-amber-500/25 disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   {actionLoading && <IconLoader2 size={16} className="animate-spin" />}
-                  {actionLoading ? "Processing…" : "Move to Trash"}
+                  {actionLoading ? "Processing…" : "Delete"}
                 </button>
               </div>
             </div>
