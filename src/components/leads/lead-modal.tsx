@@ -84,9 +84,9 @@ export function LeadModal({
     }
   };
 
-  // Filter users to only active users under the same company (unless SuperAdmin)
+  // Filter users to only ACTIVE users under the same company (unless SuperAdmin)
   const { teamUsers, adminUsers } = useMemo(() => {
-    let filtered = users.filter((u) => (u.isActive !== false && u.status !== "INACTIVE" && !u.isDeleted) || u.id === userId);
+    let filtered = users.filter((u) => (u.isActive !== false && u.status === "ACTIVE" && !u.isDeleted) || u.id === userId);
     if (!isSuperAdmin && userCompany) {
       filtered = filtered.filter((u) => {
         const uComp = (u.company || u.department || "").toLowerCase().trim();
