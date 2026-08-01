@@ -260,7 +260,7 @@ const ROLE_BADGE: Record<string, { label: string; color: string }> = {
 
 // ─── Sidebar component ────────────────────────────────────────────────────────
 
-export function Sidebar() {
+export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
@@ -386,7 +386,7 @@ export function Sidebar() {
 
   if (!isMounted) {
     return (
-      <aside className="w-[230px] h-screen sticky top-0 shrink-0 bg-nexus-card border-r border-nexus-border flex flex-col overflow-hidden">
+      <aside className="w-64 sm:w-[240px] h-screen sticky top-0 shrink-0 bg-nexus-card border-r border-nexus-border flex flex-col overflow-hidden">
         <div className="h-16 shrink-0 px-5 border-b border-nexus-border flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#10D078] to-emerald-400 flex items-center justify-center shadow-lg shadow-[#10D078]/25 text-black">
@@ -414,9 +414,9 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-[230px] h-screen sticky top-0 shrink-0 bg-nexus-card border-r border-nexus-border flex flex-col overflow-hidden">
-      <div className="h-16 shrink-0 px-5 border-b border-nexus-border flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2.5">
+    <aside className="w-64 sm:w-[240px] h-screen sticky top-0 shrink-0 bg-nexus-card border-r border-nexus-border flex flex-col overflow-hidden">
+      <div className="h-16 shrink-0 px-4 sm:px-5 border-b border-nexus-border flex items-center justify-between">
+        <Link href="/" onClick={onClose} className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#10D078] to-emerald-400 flex items-center justify-center shadow-lg shadow-[#10D078]/25 text-black">
             <IconInfinity size={22} stroke={2.5} />
           </div>
@@ -436,6 +436,7 @@ export function Sidebar() {
         {/* Dashboard */}
         <Link
           href={effectiveRole === "ADMIN" || effectiveRole === "USER" ? "/leads/metrics" : "/"}
+          onClick={onClose}
           className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${
             (effectiveRole === "ADMIN" || effectiveRole === "USER" ? pathname === "/leads/metrics" : pathname === "/")
               ? "text-[#10D078] bg-[#10D078]/10"
@@ -443,7 +444,8 @@ export function Sidebar() {
           }`}
         >
           <IconLayoutDashboard size={18} />
-          <span>Dashboard</span>
+          <span className="hidden sm:inline">Dashboard</span>
+          <span className="sm:hidden">Dash</span>
         </Link>
 
         {/* Collapsible Accordion Sections */}

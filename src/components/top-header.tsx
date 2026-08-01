@@ -20,7 +20,12 @@ const ROLE_BADGE: Record<string, { label: string; color: string }> = {
   USER:        { label: "User",        color: "text-blue-400 bg-blue-500/10 border-blue-500/25" },
 };
 
-export function TopHeader() {
+interface TopHeaderProps {
+  onMenuClick?: () => void;
+  showMenuButton?: boolean;
+}
+
+export function TopHeader({ onMenuClick, showMenuButton }: TopHeaderProps = {}) {
   const { user, logout } = useAuthStore();
   const router = useRouter();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -68,19 +73,32 @@ export function TopHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-30 h-16 bg-nexus-card border-b border-nexus-border px-6 flex items-center justify-between shadow-sm">
-      {/* LEFT SIDE: Company Name & Category (Hidden for Super Admin) */}
-      <div>
-        {!isSuperAdmin && (
-          <>
-            <h2 className="text-base font-extrabold text-nexus-text tracking-tight">
-              {effectiveUser?.company || effectiveUser?.department || "Company Workspace"}
-            </h2>
-            <p className="text-[11px] text-[#10D078] font-bold mt-0.5">
-              {(effectiveUser as any)?.category || "General"}
-            </p>
-          </>
+    <header className="sticky top-0 z-30 h-16 bg-nexus-card border-b border-nexus-border px-3 sm:px-6 flex items-center justify-between shadow-sm">
+      {/* LEFT SIDE: Menu Button (Mobile) + Company Name & Category */}
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        {showMenuButton && (
+          <button
+            onClick={onMenuClick}
+            className="md:hidden p-2 hover:bg-nexus-hover rounded-lg transition-colors flex-shrink-0"
+            aria-label="Toggle menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
         )}
+        <div className="min-w-0 flex-1">
+          {!isSuperAdmin && (
+            <>
+              <h2 className="text-sm sm:text-base font-extrabold text-nexus-text tracking-tight truncate">
+                {effectiveUser?.company || effectiveUser?.department || "Company Workspace"}
+              </h2>
+              <p className="text-[10px] sm:text-[11px] text-[#10D078] font-bold mt-0.5">
+                {(effectiveUser as any)?.category || "General"}
+              </p>
+            </>
+          )}
+        </div>
       </div>
 
       {/* RIGHT SIDE: Login Details & Dropdown */}
