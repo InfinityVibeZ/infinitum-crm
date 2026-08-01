@@ -76,6 +76,7 @@ export function ActivityModal({ isOpen, onClose, lead, onActivityUpdated, onShow
 
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
 
   // Format Switcher State: "progress" (Timeline Cards) or "table" (Table View)
   const [timelineFormat, setTimelineFormat] = useState<"progress" | "table">("progress");
@@ -208,8 +209,13 @@ export function ActivityModal({ isOpen, onClose, lead, onActivityUpdated, onShow
     setNextFollowUpType(act.nextFollowUpType || parsed.nextFollowUpType || "Call");
   };
 
-  const handleDelete = async (activityIdToDelete: string) => {
-    if (!confirm("Are you sure you want to delete this activity?")) return;
+  const handleDelete = (activityIdToDelete: string) => {
+    setDeletingActivityId(activityIdToDelete);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingActivityId) return;
+    const activityIdToDelete = deletingActivityId;
 
     try {
       const res = await fetch(`/api/leads/${lead.id}/activities?activityId=${activityIdToDelete}`, {
@@ -221,9 +227,15 @@ export function ActivityModal({ isOpen, onClose, lead, onActivityUpdated, onShow
           resetForm();
         }
         if (onActivityUpdated) onActivityUpdated();
+        if (onShowMessage) onShowMessage("Activity deleted successfully", "success");
+      } else {
+        if (onShowMessage) onShowMessage("Failed to delete activity", "error");
       }
     } catch (err) {
       console.error("Failed to delete activity", err);
+      if (onShowMessage) onShowMessage("Failed to delete activity", "error");
+    } finally {
+      setDeletingActivityId(null);
     }
   };
 
@@ -918,6 +930,32 @@ export function ActivityModal({ isOpen, onClose, lead, onActivityUpdated, onShow
           </div>
         </div>
       </div>
+
+      {/* Delete Activity Confirmation Modal */}
+      {deletingActivityId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-nexus-card border border-nexus-border rounded-xl w-full max-w-md p-6 space-y-4 shadow-2xl text-nexus-text">
+            <h3 className="text-base font-bold text-nexus-text">Delete Activity?</h3>
+            <p className="text-sm text-nexus-muted">
+              Are you sure you want to delete this activity? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeletingActivityId(null)}
+                className="px-4 py-2 text-sm font-semibold text-nexus-muted border border-nexus-border rounded-lg hover:bg-nexus-hover transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
