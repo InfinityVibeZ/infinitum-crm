@@ -675,6 +675,20 @@ export default function LeadsCRMPage() {
           {(user?.role === "SUPER_ADMIN" || user?.role === "ADMIN") && (
             <button
               onClick={() => {
+                setIsTrashOpen(true);
+                fetchTrashLeads();
+              }}
+              className="flex items-center gap-2 px-3.5 py-2.5 bg-nexus-card border border-nexus-border hover:bg-nexus-hover text-nexus-text-secondary hover:text-nexus-text font-semibold rounded-xl transition-colors text-xs"
+              title="View deleted leads"
+            >
+              <IconTrash size={16} />
+              <span>Trash</span>
+            </button>
+          )}
+
+          {(user?.role === "SUPER_ADMIN" || user?.role === "ADMIN") && (
+            <button
+              onClick={() => {
                 setEditingLead(null);
                 setIsModalOpen(true);
               }}
