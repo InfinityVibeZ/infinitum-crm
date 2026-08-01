@@ -7,36 +7,6 @@ import { sendAdminInvitationEmail, sendUserInvitationEmail } from "@/lib/mail";
 import { logAuditEvent } from "@/lib/audit";
 import type { Role } from "@prisma/client";
 
-/**
- * Annotates PENDING users with `isInvitationExpired` so the UI can distinguish
- * "Pending" (invitation still valid) from "Invitation Expired" (needs Resend).
- * The User account itself stays PENDING either way — only the invitation token expires.
- */
-async function attachInvitationStatus<T extends { id: string; status: string }>(users: T[]): Promise<(T & { isInvitationExpired: boolean })[]> {
-  const pendingIds = users.filter((u) => u.status === "PENDING").map((u) => u.id);
-  if (pendingIds.length === 0) {
-    return users.map((u) => ({ ...u, isInvitationExpired: false }));
-  }
-
-  const tokens = await prisma.invitationToken.findMany({
-    where: { userId: { in: pendingIds }, purpose: "ACCOUNT_SETUP" },
-    orderBy: { createdAt: "desc" },
-    select: { userId: true, status: true, expiresAt: true },
-  });
-
-  const latestByUser = new Map<string, { status: string; expiresAt: Date }>();
-  for (const t of tokens) {
-    if (!latestByUser.has(t.userId)) latestByUser.set(t.userId, t);
-  }
-
-  const now = new Date();
-  return users.map((u) => {
-    const latest = latestByUser.get(u.id);
-    const isInvitationExpired =
-      u.status === "PENDING" && !!latest && (latest.status === "EXPIRED" || latest.expiresAt < now);
-    return { ...u, isInvitationExpired };
-  });
-}
 
 async function syncCompanyStatus(companyId?: string | null, companyName?: string | null) {
   if (!companyId && !companyName) return;
@@ -124,18 +94,40 @@ export async function GET(request: Request) {
     const roleError = requireRole(payload.role, ["SUPER_ADMIN", "ADMIN"]);
     if (roleError) return roleError;
 
-    // ── SUPER_ADMIN grouped view (Optimized Single Query) ───────────────────
+    // ── SUPER_ADMIN grouped view (OPTIMIZED: parallel queries) ───────────────────
     if (payload.role === "SUPER_ADMIN" && grouped) {
-      const allUsers = await prisma.user.findMany({
-        where: { isDeleted: isDeletedFilter },
-        select: {
-          id: true, name: true, email: true, role: true,
-          status: true, isActive: true, isDeleted: true, deletedAt: true, lastLogin: true,
-          createdAt: true, phone: true, department: true, category: true,
-          createdBy: true, company: true, companyId: true,
-          companyRef: { select: { id: true, name: true, category: true, status: true, isActive: true } },
-        },
-        orderBy: { createdAt: "desc" },
+      // Fetch users and tokens in parallel
+      const [allUsers, invitationTokens] = await Promise.all([
+        prisma.user.findMany({
+          where: { isDeleted: isDeletedFilter },
+          select: {
+            id: true, name: true, email: true, role: true,
+            status: true, isActive: true, isDeleted: true, deletedAt: true, lastLogin: true,
+            createdAt: true, phone: true, department: true, category: true,
+            createdBy: true, company: true, companyId: true,
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.invitationToken.findMany({
+          select: { userId: true, status: true, expiresAt: true },
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
+
+      // Build invitation token map once
+      const latestTokenByUser = new Map<string, { status: string; expiresAt: Date }>();
+      const now = new Date();
+      for (const t of invitationTokens) {
+        if (!latestTokenByUser.has(t.userId)) {
+          latestTokenByUser.set(t.userId, t);
+        }
+      }
+
+      const isInvitationExpiredMap = new Map<string, boolean>();
+      allUsers.forEach((u) => {
+        const latest = latestTokenByUser.get(u.id);
+        const isExpired = u.status === "PENDING" && !!latest && (latest.status === "EXPIRED" || latest.expiresAt < now);
+        isInvitationExpiredMap.set(u.id, isExpired);
       });
 
       const adminUsers = allUsers.filter((u) => u.role === "SUPER_ADMIN" || u.role === "ADMIN");
@@ -143,19 +135,24 @@ export async function GET(request: Request) {
 
       const adminMap = new Map<string, any>();
       adminUsers.forEach((admin) => {
-        adminMap.set(admin.id, { ...admin, users: [], userCount: 0 });
+        adminMap.set(admin.id, {
+          ...admin,
+          isInvitationExpired: isInvitationExpiredMap.get(admin.id) ?? false,
+          users: [],
+          userCount: 0,
+        });
       });
 
       const unassignedUsers: any[] = [];
 
       regularUsers.forEach((u) => {
-        // Strictly match users to the Admin who created them (createdBy === admin.id)
+        const userWithStatus = { ...u, isInvitationExpired: isInvitationExpiredMap.get(u.id) ?? false };
         if (u.createdBy && adminMap.has(u.createdBy)) {
           const adminGroup = adminMap.get(u.createdBy);
-          adminGroup.users.push(u);
+          adminGroup.users.push(userWithStatus);
           adminGroup.userCount++;
         } else {
-          unassignedUsers.push(u);
+          unassignedUsers.push(userWithStatus);
         }
       });
 
@@ -171,48 +168,66 @@ export async function GET(request: Request) {
         }
       }
 
-      const annotatedAllUsers = await attachInvitationStatus(allUsers);
-      const invitationFlagById = new Map(annotatedAllUsers.map((u) => [u.id, u.isInvitationExpired]));
-      const annotatedResult = result.map((group) => ({
-        ...group,
-        isInvitationExpired: invitationFlagById.get(group.id) ?? false,
-        users: group.users.map((u: any) => ({ ...u, isInvitationExpired: invitationFlagById.get(u.id) ?? false })),
+      const annotatedAllUsers = allUsers.map((u) => ({
+        ...u,
+        isInvitationExpired: isInvitationExpiredMap.get(u.id) ?? false,
       }));
 
-      const groupedRes = NextResponse.json({ admins: annotatedResult, allUsers: annotatedAllUsers });
+      const groupedRes = NextResponse.json({ admins: result, allUsers: annotatedAllUsers });
       groupedRes.headers.set("Cache-Control", "no-store");
       return groupedRes;
     }
 
-    // ── SUPER_ADMIN flat view ────────────────────────────────────────────────
+    // ── SUPER_ADMIN flat view (OPTIMIZED: single query + batch) ────────────────────────
     if (payload.role === "SUPER_ADMIN") {
-      const allUsers = await prisma.user.findMany({
-        where: { isDeleted: isDeletedFilter },
-        select: {
-          id: true, name: true, email: true, role: true,
-          status: true, department: true, category: true, company: true, companyId: true,
-          phone: true, avatarUrl: true, modules: true,
-          createdBy: true, lastLogin: true, createdAt: true,
-          isActive: true, isDeleted: true, deletedAt: true,
-          companyRef: { select: { id: true, name: true, category: true, status: true, isActive: true } },
-        },
-        orderBy: { createdAt: "desc" },
+      // Fetch all data in parallel
+      const [allUsers, invitationTokens] = await Promise.all([
+        prisma.user.findMany({
+          where: { isDeleted: isDeletedFilter },
+          select: {
+            id: true, name: true, email: true, role: true,
+            status: true, department: true, category: true, company: true, companyId: true,
+            phone: true, avatarUrl: true, modules: true,
+            createdBy: true, lastLogin: true, createdAt: true,
+            isActive: true, isDeleted: true, deletedAt: true,
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.invitationToken.findMany({
+          select: { userId: true, status: true, expiresAt: true },
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
+
+      // Build creator map without separate query by using existing users data
+      const creatorMap = new Map<string, string>();
+      allUsers.forEach((u) => {
+        if (u.createdBy) {
+          const creator = allUsers.find((a) => a.id === u.createdBy);
+          if (creator && !creatorMap.has(u.createdBy)) {
+            creatorMap.set(u.createdBy, creator.name);
+          }
+        }
       });
 
-      const creatorIds = Array.from(new Set(allUsers.map((u) => u.createdBy).filter(Boolean))) as string[];
-      const creators = creatorIds.length
-        ? await prisma.user.findMany({
-            where: { id: { in: creatorIds } },
-            select: { id: true, name: true },
-          })
-        : [];
-      const creatorMap = Object.fromEntries(creators.map((c) => [c.id, c.name]));
+      // Build invitation token map
+      const latestTokenByUser = new Map<string, { status: string; expiresAt: Date }>();
+      for (const t of invitationTokens) {
+        if (!latestTokenByUser.has(t.userId)) {
+          latestTokenByUser.set(t.userId, t);
+        }
+      }
 
-      const withInvitationStatus = await attachInvitationStatus(allUsers);
-      const enriched = withInvitationStatus.map((u) => ({
-        ...u,
-        createdByName: u.createdBy ? (creatorMap[u.createdBy] ?? "—") : "—",
-      }));
+      const now = new Date();
+      const enriched = allUsers.map((u) => {
+        const latest = latestTokenByUser.get(u.id);
+        const isInvitationExpired = u.status === "PENDING" && !!latest && (latest.status === "EXPIRED" || latest.expiresAt < now);
+        return {
+          ...u,
+          createdByName: u.createdBy ? (creatorMap.get(u.createdBy) ?? "—") : "—",
+          isInvitationExpired,
+        };
+      });
 
       const enrichedRes = NextResponse.json(enriched);
       enrichedRes.headers.set("Cache-Control", "no-store");
@@ -237,22 +252,37 @@ export async function GET(request: Request) {
       adminOrConditions.push({ department: { equals: adminCompName, mode: "insensitive" } });
     }
 
-    const users = await prisma.user.findMany({
-      where: {
-        isDeleted: isDeletedFilter,
-        role: { in: ["ADMIN", "USER"] },
-        OR: adminOrConditions,
-      },
-      select: {
-        id: true, name: true, email: true, role: true,
-        status: true, department: true, category: true, company: true, companyId: true,
-        phone: true, avatarUrl: true, modules: true,
-        createdBy: true, lastLogin: true, createdAt: true,
-        isActive: true, isDeleted: true, deletedAt: true,
-        companyRef: { select: { id: true, name: true, category: true, status: true, isActive: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    // OPTIMIZED: fetch users and tokens in parallel
+    const [users, invitationTokens] = await Promise.all([
+      prisma.user.findMany({
+        where: {
+          isDeleted: isDeletedFilter,
+          role: { in: ["ADMIN", "USER"] },
+          OR: adminOrConditions,
+        },
+        select: {
+          id: true, name: true, email: true, role: true,
+          status: true, department: true, category: true, company: true, companyId: true,
+          phone: true, avatarUrl: true, modules: true,
+          createdBy: true, lastLogin: true, createdAt: true,
+          isActive: true, isDeleted: true, deletedAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.invitationToken.findMany({
+        select: { userId: true, status: true, expiresAt: true },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+    // Build invitation token map
+    const latestTokenByUser = new Map<string, { status: string; expiresAt: Date }>();
+    const now = new Date();
+    for (const t of invitationTokens) {
+      if (!latestTokenByUser.has(t.userId)) {
+        latestTokenByUser.set(t.userId, t);
+      }
+    }
 
     // Sort logged-in Admin first, then other Admins, then Users
     const sortedUsers = users.sort((a, b) => {
@@ -268,7 +298,13 @@ export async function GET(request: Request) {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-    const annotatedSortedUsers = await attachInvitationStatus(sortedUsers);
+    // Add invitation status to each user
+    const annotatedSortedUsers = sortedUsers.map((u) => {
+      const latest = latestTokenByUser.get(u.id);
+      const isInvitationExpired = u.status === "PENDING" && !!latest && (latest.status === "EXPIRED" || latest.expiresAt < now);
+      return { ...u, isInvitationExpired };
+    });
+
     const sortedRes = NextResponse.json(annotatedSortedUsers);
     sortedRes.headers.set("Cache-Control", "no-store");
     return sortedRes;
