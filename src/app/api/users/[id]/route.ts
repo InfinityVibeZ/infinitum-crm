@@ -311,13 +311,13 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     }
 
     // Default: Soft Delete (Move to archive / trash)
+    // Preserve original status - only mark as deleted via isDeleted flag
     const softDeleted = await prisma.user.update({
       where: { id: params.id },
       data: {
         isDeleted: true,
         deletedAt: new Date(),
         isActive: false,
-        status: "INACTIVE",
       },
       select: { id: true, name: true, email: true, role: true, isActive: true, status: true, isDeleted: true, companyId: true, company: true },
     });
