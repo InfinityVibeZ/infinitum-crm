@@ -637,11 +637,13 @@ export default function LeadsCRMPage() {
             <span className="p-2 bg-nexus-primary/10 rounded-xl text-nexus-primary">
               <IconUsers size={24} />
             </span>
-            Leads CRM
+            {isUserRole ? "My Leads" : "Leads CRM"}
           </h1>
-          <p className="text-sm text-nexus-text-secondary mt-1">
-            Store and track your leads through the sales pipeline, activities, and payment status.
-          </p>
+          {!isUserRole && (
+            <p className="text-sm text-nexus-text-secondary mt-1">
+              Store and track your leads through the sales pipeline, activities, and payment status.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3 self-start md:self-auto">
           {/* View Mode Switcher */}
