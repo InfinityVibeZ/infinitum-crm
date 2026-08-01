@@ -1403,6 +1403,10 @@ export default function LeadsCRMPage() {
         }}
         lead={activityLead}
         onActivityUpdated={fetchLeads}
+        onShowMessage={(msg, type) => {
+          if (type === "success") setSuccessMessage(msg);
+          else setErrorMessage(msg);
+        }}
       />
 
       {/* Payment Modal */}
@@ -1414,6 +1418,10 @@ export default function LeadsCRMPage() {
         }}
         lead={paymentLead}
         onPaymentUpdated={fetchLeads}
+        onShowMessage={(msg, type) => {
+          if (type === "success") setSuccessMessage(msg);
+          else setErrorMessage(msg);
+        }}
       />
 
       {/* Soft Delete Confirmation Modal */}

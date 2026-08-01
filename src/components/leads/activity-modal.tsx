@@ -24,6 +24,7 @@ interface ActivityModalProps {
   onClose: () => void;
   lead: any;
   onActivityUpdated?: () => void;
+  onShowMessage?: (message: string, type: "success" | "error") => void;
 }
 
 const format12HrDateTime = (dateVal: any, fallbackTime?: string | null) => {
@@ -60,7 +61,7 @@ const formatFollowUpDisplay = (fDate: any, fTime?: string | null, fType?: string
   return `${dStr} ${fTime ? `• ${fTime}` : ""} (${fType || "Call"})`;
 };
 
-export function ActivityModal({ isOpen, onClose, lead, onActivityUpdated }: ActivityModalProps) {
+export function ActivityModal({ isOpen, onClose, lead, onActivityUpdated, onShowMessage }: ActivityModalProps) {
   const [timelineData, setTimelineData] = useState<{
     lead?: any;
     activities: any[];
@@ -167,6 +168,7 @@ export function ActivityModal({ isOpen, onClose, lead, onActivityUpdated }: Acti
       if (res.ok) {
         fetchTimelineData();
         resetForm();
+        if (onShowMessage) onShowMessage("Activity saved successfully", "success");
         if (onActivityUpdated) onActivityUpdated();
       }
     } catch (err) {

@@ -8,9 +8,10 @@ interface PaymentModalProps {
   onClose: () => void;
   lead: any;
   onPaymentUpdated?: () => void;
+  onShowMessage?: (message: string, type: "success" | "error") => void;
 }
 
-export function PaymentModal({ isOpen, onClose, lead, onPaymentUpdated }: PaymentModalProps) {
+export function PaymentModal({ isOpen, onClose, lead, onPaymentUpdated, onShowMessage }: PaymentModalProps) {
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -115,6 +116,7 @@ export function PaymentModal({ isOpen, onClose, lead, onPaymentUpdated }: Paymen
 
       fetchPayments();
       resetForm();
+      if (onShowMessage) onShowMessage("Payment saved successfully", "success");
       if (onPaymentUpdated) onPaymentUpdated();
     } catch (err: any) {
       setError(err.message || "Failed to record payment");
