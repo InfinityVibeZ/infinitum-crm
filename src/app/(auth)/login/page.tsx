@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
-import { IconKey, IconX, IconCopy, IconCheck, IconLoader2, IconInfinity } from "@tabler/icons-react";
+import { IconKey, IconX, IconCopy, IconCheck, IconLoader2, IconInfinity, IconEye, IconEyeOff } from "@tabler/icons-react";
 
 function LoginForm() {
   const router = useRouter();
@@ -14,6 +14,7 @@ function LoginForm() {
   const initialError = searchParams.get("msg") || (searchParams.get("deactivated") ? "You don't have access to this portal or application. Please contact the Infinitum team." : "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(initialError);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -178,22 +179,33 @@ function LoginForm() {
             >
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (isPasswordError) setError("");
-              }}
-              placeholder="••••••••"
-              required
-              className={`w-full bg-nexus-bg border rounded-lg px-4 py-2.5 text-sm text-nexus-text placeholder:text-nexus-muted focus:outline-none focus:ring-1 ${
-                isPasswordError
-                  ? "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20"
-                  : "border-nexus-border focus:border-nexus-primary/50 focus:ring-nexus-primary/20"
-              }`}
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (isPasswordError) setError("");
+                }}
+                placeholder="••••••••"
+                required
+                className={`w-full bg-nexus-bg border rounded-lg pl-4 pr-10 py-2.5 text-sm text-nexus-text placeholder:text-nexus-muted focus:outline-none focus:ring-1 ${
+                  isPasswordError
+                    ? "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20"
+                    : "border-nexus-border focus:border-nexus-primary/50 focus:ring-nexus-primary/20"
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                tabIndex={-1}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-nexus-muted hover:text-nexus-text transition-colors"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <IconEyeOff size={17} /> : <IconEye size={17} />}
+              </button>
+            </div>
             {isPasswordError && <p className="text-[11px] text-red-400 mt-1">{error}</p>}
           </div>
 
