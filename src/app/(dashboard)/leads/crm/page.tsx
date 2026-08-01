@@ -1439,9 +1439,13 @@ export default function LeadsCRMPage() {
           <div className="bg-nexus-card border border-nexus-border rounded-xl w-full max-w-md p-6 space-y-4 shadow-2xl text-nexus-text">
             <h3 className="text-lg font-bold text-red-400">Delete Lead?</h3>
             <p className="text-sm text-nexus-text-secondary leading-relaxed">
-              Are you sure you want to remove <strong>{deletingLead.firstName} {deletingLead.lastName}</strong> {deletingLead.company ? `(${deletingLead.company})` : ""}?
-              <br /><br />
-              The lead will be moved to <strong>Deleted Leads (Trash)</strong> and can be restored at any time.
+              Are you sure you want to delete <strong>{deletingLead.firstName} {deletingLead.lastName}</strong> {deletingLead.company ? `(${deletingLead.company})` : ""}?
+              {user?.role === "SUPER_ADMIN" && (
+                <>
+                  <br /><br />
+                  The lead will be moved to <strong>Deleted Leads (Trash)</strong> and can be restored at any time.
+                </>
+              )}
             </p>
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-nexus-border">
               <button
