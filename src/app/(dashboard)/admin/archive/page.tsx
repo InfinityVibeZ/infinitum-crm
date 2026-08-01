@@ -44,7 +44,7 @@ interface TrashedLead {
   leadSource?: string;
   createdAt: string;
   deletedAt?: string;
-  user?: { name: string; email: string };
+  user?: { name: string; email: string; company?: string; department?: string };
 }
 
 interface TrashedCompany {
@@ -649,7 +649,9 @@ export default function AdminArchivePage() {
                           </p>
                           <p className="text-xs text-nexus-muted">{l.email}</p>
                         </td>
-                        <td className="p-4 text-nexus-muted text-xs">{l.company || "—"}</td>
+                        <td className="p-4 text-nexus-muted text-xs">
+                          {l.user?.company || l.user?.department || l.company || "—"}
+                        </td>
                         <td className="p-4 text-nexus-muted text-xs">{formatDate(l.createdAt)}</td>
                         <td className="p-4 text-nexus-muted text-xs">{formatDate(l.deletedAt)}</td>
                         <td className="p-4 text-nexus-muted text-xs">

@@ -90,7 +90,7 @@ export async function GET(request: Request) {
       where,
       include: {
         user: {
-          select: { id: true, name: true, email: true, avatarUrl: true },
+          select: { id: true, name: true, email: true, avatarUrl: true, company: true, department: true, companyId: true },
         },
         deals: {
           select: { id: true, name: true, stage: true, value: true },
@@ -223,7 +223,7 @@ export async function POST(request: Request) {
       },
       include: {
         user: {
-          select: { id: true, name: true, email: true, avatarUrl: true },
+          select: { id: true, name: true, email: true, avatarUrl: true, company: true, department: true, companyId: true },
         },
         followUps: true,
         statusHistory: true,
