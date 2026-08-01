@@ -29,23 +29,23 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ error: "Lead not found or unauthorized" }, { status: 404 });
     }
 
-    const activities = await prisma.activity.findMany({
-      where: { leadId: params.id },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const statusHistory = await prisma.leadStatusHistory.findMany({
-      where: { leadId: params.id },
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-      },
-      orderBy: { changedAt: "desc" },
-    });
-
-    const payments = await prisma.leadPayment.findMany({
-      where: { leadId: params.id, status: "PAID" },
-      orderBy: { paymentDate: "desc" },
-    });
+    const [activities, statusHistory, payments] = await Promise.all([
+      prisma.activity.findMany({
+        where: { leadId: params.id },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.leadStatusHistory.findMany({
+        where: { leadId: params.id },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { changedAt: "desc" },
+      }),
+      prisma.leadPayment.findMany({
+        where: { leadId: params.id, status: "PAID" },
+        orderBy: { paymentDate: "desc" },
+      }),
+    ]);
 
     return NextResponse.json({
       lead,

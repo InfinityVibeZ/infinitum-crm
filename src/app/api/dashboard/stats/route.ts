@@ -57,17 +57,33 @@ export async function GET(request: Request) {
     // Note: Activity model also has userId, so we apply the same filter
     const activityWhere = dateFilter ? { createdAt: dateFilter, ...userFilter } : userFilter;
 
-    // 1. Fetch total leads count & active leads
-    const totalLeadsCount = await prisma.lead.count({ where: leadWhere });
-    const activeLeadsCount = await prisma.lead.count({
-      where: { ...leadWhere, status: { notIn: ["LOST"] } },
-    });
+    // Fetch leads, deals, and recent activities in parallel — none of these
+    // queries depend on each other's results.
+    const [leads, deals, recentActivities] = await Promise.all([
+      // Includes status so total/active lead counts can be derived below
+      // instead of running two separate COUNT queries over the same rows.
+      prisma.lead.findMany({
+        where: leadWhere,
+        select: { revenueGenerated: true, cashCollected: true, score: true, status: true },
+      }),
+      prisma.deal.findMany({
+        where: dealWhere,
+        select: { id: true, stage: true, value: true, createdAt: true },
+      }),
+      prisma.activity.findMany({
+        where: activityWhere,
+        take: 5,
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: { select: { name: true } },
+          lead: { select: { firstName: true, lastName: true } },
+          deal: { select: { name: true } },
+        },
+      }),
+    ]);
 
-    // 2. Fetch all leads for cash & revenue aggregation
-    const leads = await prisma.lead.findMany({
-      where: leadWhere,
-      select: { revenueGenerated: true, cashCollected: true, score: true },
-    });
+    const totalLeadsCount = leads.length;
+    const activeLeadsCount = leads.filter((l) => l.status !== "LOST").length;
 
     const totalRevenueGenerated = leads.reduce(
       (sum, l) => sum + parseFloat(l.revenueGenerated?.toString() || "0"),
@@ -78,12 +94,6 @@ export async function GET(request: Request) {
       (sum, l) => sum + parseFloat(l.cashCollected?.toString() || "0"),
       0
     );
-
-    // 3. Fetch all deals for pipeline value & win rate calculation
-    const deals = await prisma.deal.findMany({
-      where: dealWhere,
-      select: { id: true, stage: true, value: true, createdAt: true },
-    });
 
     const totalDealsCount = deals.length;
     const activeDeals = deals.filter(
@@ -116,18 +126,6 @@ export async function GET(request: Request) {
         month: m,
         score: val > 0 ? Math.min(100, Math.round(val / 1000) + 50) : (idx + 1) * 15,
       };
-    });
-
-    // 5. Fetch Recent Activities
-    const recentActivities = await prisma.activity.findMany({
-      where: activityWhere,
-      take: 5,
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: { select: { name: true } },
-        lead: { select: { firstName: true, lastName: true } },
-        deal: { select: { name: true } },
-      },
     });
 
     const avgScore =
