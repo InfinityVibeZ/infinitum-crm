@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   IconLock,
@@ -17,6 +17,22 @@ import {
 import { PASSWORD_REQUIREMENTS, getPasswordStrength } from "@/lib/passwordPolicy";
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#0A0D14] flex flex-col items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#111622] border border-nexus-border/60 rounded-2xl shadow-2xl p-6 sm:p-8 relative z-10 backdrop-blur-xl">
+            <p className="text-center text-sm text-nexus-muted">Loading reset password...</p>
+          </div>
+        </div>
+      }
+    >
+      <ResetPasswordPageClient />
+    </Suspense>
+  );
+}
+
+function ResetPasswordPageClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get("token");
