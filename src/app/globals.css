@@ -2,26 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 224 43% 4%;
+    --foreground: 210 40% 96%;
+    --card: 222 36% 7%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 36% 7%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 153 75% 45%;
+    --primary-foreground: 224 43% 4%;
+    --secondary: 220 28% 12%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 220 28% 12%;
+    --muted-foreground: 215 16% 57%;
+    --accent: 220 28% 12%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 222 30% 13%;
+    --input: 222 30% 13%;
+    --ring: 153 75% 45%;
+    --radius: 0.5rem;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-nexus-bg text-nexus-text;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* Custom scrollbar for NEXUS dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #06080F;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #151B2C;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #20273D;
+}
+
+/* Smooth transitions globally */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
 }
