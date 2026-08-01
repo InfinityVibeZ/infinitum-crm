@@ -1318,7 +1318,7 @@ export default function UserManagementPage() {
                 <IconTrash size={24} className="text-amber-400" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-nexus-text">Move User to Trash?</h3>
+                <h3 className="text-lg font-bold text-nexus-text">Delete User?</h3>
                 <p className="text-base font-bold text-nexus-text mt-2">{confirmSoftDeleteUser.name}</p>
                 <p className="text-xs text-nexus-muted">{confirmSoftDeleteUser.email}</p>
               </div>
@@ -1333,7 +1333,7 @@ export default function UserManagementPage() {
                 className="flex-1 px-4 py-2.5 text-sm font-bold bg-amber-500 text-black rounded-xl hover:bg-amber-400 shadow-lg shadow-amber-500/25 disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {actionLoading && <IconLoader2 size={16} className="animate-spin" />}
-                {actionLoading ? "Processing…" : "Move to Trash"}
+                {actionLoading ? "Processing…" : "Delete"}
               </button>
             </div>
           </div>
