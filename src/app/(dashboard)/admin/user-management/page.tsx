@@ -786,11 +786,11 @@ export default function UserManagementPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      showToast(`"${u.name}" moved to Trash / Archive`, "success");
+      showToast(`User "${u.name}" deleted successfully`, "success");
       setConfirmSoftDeleteUser(null);
       fetchData(true);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : "Error soft deleting user", "error");
+      showToast(e instanceof Error ? e.message : "Error deleting user", "error");
     } finally {
       setActionLoading(false);
     }
