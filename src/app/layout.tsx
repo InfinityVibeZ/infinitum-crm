@@ -16,6 +16,9 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Infinitum CRM",
   description: "Modern sales CRM for managing leads, deals, and revenue",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
