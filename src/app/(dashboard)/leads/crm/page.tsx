@@ -1407,6 +1407,7 @@ export default function LeadsCRMPage() {
           if (type === "success") setSuccessMessage(msg);
           else setErrorMessage(msg);
         }}
+        currentUserId={user?.id}
       />
 
       {/* Payment Modal */}

@@ -25,6 +25,7 @@ interface ActivityModalProps {
   lead: any;
   onActivityUpdated?: () => void;
   onShowMessage?: (message: string, type: "success" | "error") => void;
+  currentUserId?: string;
 }
 
 const format12HrDateTime = (dateVal: any, fallbackTime?: string | null) => {
@@ -61,7 +62,7 @@ const formatFollowUpDisplay = (fDate: any, fTime?: string | null, fType?: string
   return `${dStr} ${fTime ? `• ${fTime}` : ""} (${fType || "Call"})`;
 };
 
-export function ActivityModal({ isOpen, onClose, lead, onActivityUpdated, onShowMessage }: ActivityModalProps) {
+export function ActivityModal({ isOpen, onClose, lead, onActivityUpdated, onShowMessage, currentUserId }: ActivityModalProps) {
   const [timelineData, setTimelineData] = useState<{
     lead?: any;
     activities: any[];
@@ -747,24 +748,26 @@ export function ActivityModal({ isOpen, onClose, lead, onActivityUpdated, onShow
                             <span className="px-2 py-0.5 rounded bg-nexus-card text-nexus-text border border-nexus-border font-medium text-[11px]">
                               Outcome: <strong className="text-nexus-primary">{item.outcome}</strong>
                             </span>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleEdit(item.raw)}
-                                className="p-1 text-nexus-muted hover:text-nexus-primary transition-colors"
-                                title="Edit Activity"
-                              >
-                                <IconEdit size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(item.raw.id)}
-                                className="p-1 text-nexus-muted hover:text-red-400 transition-colors"
-                                title="Delete Activity"
-                              >
-                                <IconTrash size={14} />
-                              </button>
-                            </div>
+                            {currentUserId === item.raw.userId && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEdit(item.raw)}
+                                  className="p-1 text-nexus-muted hover:text-nexus-primary transition-colors"
+                                  title="Edit Activity"
+                                >
+                                  <IconEdit size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(item.raw.id)}
+                                  className="p-1 text-nexus-muted hover:text-red-400 transition-colors"
+                                  title="Delete Activity"
+                                >
+                                  <IconTrash size={14} />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -880,7 +883,7 @@ export function ActivityModal({ isOpen, onClose, lead, onActivityUpdated, onShow
 
                                 {/* 7. Actions */}
                                 <td className="py-3 px-4 whitespace-nowrap text-right">
-                                  {item.type === "LEAD_CREATED" ? (
+                                  {item.type === "LEAD_CREATED" || currentUserId !== item.raw.userId ? (
                                     <span className="text-nexus-muted text-[11px]">-</span>
                                   ) : (
                                     <div className="flex items-center justify-end gap-1">
