@@ -256,13 +256,37 @@ export async function DELETE(
     const permanent = searchParams.get("permanent") === "true";
 
     const tenantFilter = await getTenantWhereClauseAsync(payload);
-    
+
     // Verify access before deleting
     const existingLead = await prisma.lead.findFirst({
       where: { id: params.id, ...tenantFilter },
     });
     if (!existingLead) {
       return NextResponse.json({ error: "Lead not found or unauthorized" }, { status: 404 });
+    }
+
+    // Check for related payments, follow-ups, and activities
+    const [paymentsCount, followUpsCount, activitiesCount] = await Promise.all([
+      prisma.leadPayment.count({ where: { leadId: params.id } }),
+      prisma.followUp.count({ where: { leadId: params.id } }),
+      prisma.activity.count({ where: { leadId: params.id } }),
+    ]);
+
+    const hasRelatedData = paymentsCount > 0 || followUpsCount > 0 || activitiesCount > 0;
+
+    // Prevent soft delete if there's related data; allow permanent delete only for Super Admin
+    if (hasRelatedData && !permanent) {
+      return NextResponse.json(
+        {
+          error: "Cannot delete lead with associated payments, follow-ups, or activities. Please remove these records first or permanently delete the lead.",
+          details: {
+            payments: paymentsCount,
+            followUps: followUpsCount,
+            activities: activitiesCount,
+          },
+        },
+        { status: 400 }
+      );
     }
 
     if (permanent && payload.role === "SUPER_ADMIN") {
