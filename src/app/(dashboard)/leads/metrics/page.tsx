@@ -218,14 +218,20 @@ export default function LeadMetricsPage() {
     }
   });
 
-  const userPerformanceList = Object.values(userPerformanceMap).sort((a, b) => {
-    const aIsAdmin = a.role === "SUPER_ADMIN" || a.role === "ADMIN";
-    const bIsAdmin = b.role === "SUPER_ADMIN" || b.role === "ADMIN";
+  const userPerformanceList = Object.values(userPerformanceMap)
+    .filter((rep) => {
+      // Only show ACTIVE users/admins
+      const user = allUsers.find((u) => u.name === rep.name);
+      return user && user.status === "ACTIVE" && user.isActive !== false;
+    })
+    .sort((a, b) => {
+      const aIsAdmin = a.role === "SUPER_ADMIN" || a.role === "ADMIN";
+      const bIsAdmin = b.role === "SUPER_ADMIN" || b.role === "ADMIN";
 
-    if (aIsAdmin && !bIsAdmin) return -1;
-    if (!aIsAdmin && bIsAdmin) return 1;
-    return b.total - a.total;
-  });
+      if (aIsAdmin && !bIsAdmin) return -1;
+      if (!aIsAdmin && bIsAdmin) return 1;
+      return b.total - a.total;
+    });
 
   return (
     <div className="space-y-6 text-nexus-text font-sans pb-10">
