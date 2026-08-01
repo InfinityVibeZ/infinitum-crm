@@ -28,9 +28,7 @@ export default function LeadMetricsPage() {
   const [leads, setLeads] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  // Default to a broad window so the dashboard shows real data immediately instead of
-  // looking empty just because nothing happened to be created "Today".
-  const [dateRange, setDateRange] = useState<DateRangeKey>("LAST_MONTH");
+  const [dateRange, setDateRange] = useState<DateRangeKey>("TODAY");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
