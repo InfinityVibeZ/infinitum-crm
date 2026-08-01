@@ -295,7 +295,6 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       }
 
       await prisma.user.delete({ where: { id: params.id } });
-      await syncCompanyStatus(targetUser.companyId, targetUser.company);
 
       await logAuditEvent({
         action: "USER_DELETED_PERMANENTLY",
@@ -322,8 +321,6 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       },
       select: { id: true, name: true, email: true, role: true, isActive: true, status: true, isDeleted: true, companyId: true, company: true },
     });
-
-    await syncCompanyStatus(softDeleted.companyId || targetUser.companyId, softDeleted.company || targetUser.company);
 
     await logAuditEvent({
       action: "USER_ARCHIVED",
