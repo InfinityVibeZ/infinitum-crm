@@ -217,32 +217,32 @@ async function main() {
   for (const [code, name, featureType, module] of features) {
     const now = new Date();
 
-    await prisma.features.upsert({
+    await prisma.feature.upsert({
       where: {
         code,
       },
 
       update: {
         name,
-        feature_type: featureType,
+        featureType: featureType,
         module,
         status: FeatureStatus.ACTIVE,
-        is_visible: true,
-        updated_at: now,
+        isVisible: true,
+        updatedAt: now,
       },
 
       create: {
         id: crypto.randomUUID(),
         code,
         name,
-        feature_type: featureType,
+        featureType: featureType,
         module,
         status: FeatureStatus.ACTIVE,
-        is_visible: true,
-        is_metered: false,
-        is_system: false,
-        created_at: now,
-        updated_at: now,
+        isVisible: true,
+        isMetered: false,
+        isSystem: false,
+        createdAt: now,
+        updatedAt: now,
       },
     });
   }
@@ -251,7 +251,7 @@ async function main() {
   for (const plan of plans) {
     const now = new Date();
 
-    const createdPlan = await prisma.plans.upsert({
+    const createdPlan = await prisma.plan.upsert({
       where: {
         code: plan.code,
       },
@@ -260,15 +260,15 @@ async function main() {
         name: plan.name,
         description: plan.description,
         status: PlanStatus.ACTIVE,
-        display_order: plan.displayOrder,
-        is_public: true,
-        is_default: plan.code === "BASIC",
-        trial_days: 14,
-        billing_interval: BillingInterval.MONTH,
-        billing_interval_count: 1,
+        displayOrder: plan.displayOrder,
+        isPublic: true,
+        isDefault: plan.code === "BASIC",
+        trialDays: 14,
+        billingInterval: BillingInterval.MONTH,
+        billingIntervalCount: 1,
         currency: "INR",
-        base_price: 0,
-        updated_at: now,
+        basePrice: 0,
+        updatedAt: now,
       },
 
       create: {
@@ -276,24 +276,24 @@ async function main() {
         code: plan.code,
         name: plan.name,
         description: plan.description,
-        plan_type: PlanType.STANDARD,
+        planType: PlanType.STANDARD,
         status: PlanStatus.ACTIVE,
-        display_order: plan.displayOrder,
-        is_public: true,
-        is_default: plan.code === "BASIC",
-        trial_days: 14,
-        billing_interval: BillingInterval.MONTH,
-        billing_interval_count: 1,
+        displayOrder: plan.displayOrder,
+        isPublic: true,
+        isDefault: plan.code === "BASIC",
+        trialDays: 14,
+        billingInterval: BillingInterval.MONTH,
+        billingIntervalCount: 1,
         currency: "INR",
-        base_price: 0,
-        created_at: now,
-        updated_at: now,
+        basePrice: 0,
+        createdAt: now,
+        updatedAt: now,
       },
     });
 
     // PLAN FEATURES
     for (const featureCode of planFeatures[plan.code]) {
-      const feature = await prisma.features.findUnique({
+      const feature = await prisma.feature.findUnique({
         where: {
           code: featureCode,
         },
@@ -305,26 +305,26 @@ async function main() {
 
       const nowForPlanFeature = new Date();
 
-      await prisma.plan_features.upsert({
+      await prisma.planFeature.upsert({
         where: {
-          plan_id_feature_id: {
-            plan_id: createdPlan.id,
-            feature_id: feature.id,
+          planId_featureId: {
+            planId: createdPlan.id,
+            featureId: feature.id,
           },
         },
 
         update: {
           enabled: true,
-          updated_at: nowForPlanFeature,
+          updatedAt: nowForPlanFeature,
         },
 
         create: {
           id: crypto.randomUUID(),
-          plan_id: createdPlan.id,
-          feature_id: feature.id,
+          planId: createdPlan.id,
+          featureId: feature.id,
           enabled: true,
-          created_at: nowForPlanFeature,
-          updated_at: nowForPlanFeature,
+          createdAt: nowForPlanFeature,
+          updatedAt: nowForPlanFeature,
         },
       });
     }

@@ -31,18 +31,10 @@ export async function GET(request: Request) {
     const where: any = {};
 
     if (search) {
-      where.OR = [
-        { actorName:  { contains: search, mode: "insensitive" } },
-        { actorEmail: { contains: search, mode: "insensitive" } },
-        { summary:    { contains: search, mode: "insensitive" } },
-        { action:     { contains: search, mode: "insensitive" } },
-        { targetName: { contains: search, mode: "insensitive" } },
-      ];
+      where.action = { contains: search, mode: "insensitive" };
     }
 
-    if (category) where.category = category;
-    if (severity) where.severity = severity;
-    if (action)   where.action   = action;
+    let allowedEmails: string[] | null = null;
 
     // AuditLog has no companyId column, so an ADMIN's visibility is scoped by intersecting
     // their existing search filter with the set of actor emails belonging to their own
@@ -68,16 +60,7 @@ export async function GET(request: Request) {
         where: { OR: orConditions },
         select: { email: true },
       });
-      const allowedEmails = companyUsers.map((u) => u.email);
-      const scopeFilter = { actorEmail: { in: allowedEmails } };
-
-      if (where.OR) {
-        // Combine with the free-text search OR via AND so scoping is never bypassed by search
-        where.AND = [{ OR: where.OR }, scopeFilter];
-        delete where.OR;
-      } else {
-        Object.assign(where, scopeFilter);
-      }
+      allowedEmails = companyUsers.map((u) => u.email);
     }
 
     if (from || to) {
@@ -94,10 +77,43 @@ export async function GET(request: Request) {
     const logs = await prisma.auditLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: 500,
+      take: 1000,
     });
 
-    return NextResponse.json(logs);
+    // In-memory filtering for metadata fields that were moved out of schema
+    let filteredLogs = logs.filter((log) => {
+      const meta: any = log.metadata || {};
+      
+      if (category && meta.category !== category) return false;
+      if (severity && meta.severity !== severity) return false;
+      
+      if (search && !log.action.toLowerCase().includes(search.toLowerCase())) {
+        const searchLower = search.toLowerCase();
+        const matchesMeta = 
+          (meta.actorName && meta.actorName.toLowerCase().includes(searchLower)) ||
+          (meta.actorEmail && meta.actorEmail.toLowerCase().includes(searchLower)) ||
+          (meta.summary && meta.summary.toLowerCase().includes(searchLower)) ||
+          (meta.targetName && meta.targetName.toLowerCase().includes(searchLower));
+        
+        if (!matchesMeta) return false;
+      }
+
+      if (allowedEmails && meta.actorEmail) {
+        if (!allowedEmails.includes(meta.actorEmail)) return false;
+      } else if (allowedEmails && !meta.actorEmail) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // Remap metadata fields to top level so UI doesn't break
+    const finalLogs = filteredLogs.slice(0, 500).map(log => ({
+      ...log,
+      ...((log.metadata as any) || {})
+    }));
+
+    return NextResponse.json(finalLogs);
   } catch (error) {
     console.error("GET /api/audit-logs error:", error);
     return NextResponse.json({ error: "Failed to fetch audit logs" }, { status: 500 });

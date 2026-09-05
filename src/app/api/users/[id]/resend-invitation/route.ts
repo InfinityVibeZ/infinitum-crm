@@ -5,10 +5,8 @@ import { createAccountSetupToken } from "@/lib/tokens";
 import { sendAdminInvitationEmail, sendUserInvitationEmail } from "@/lib/mail";
 import { logAuditEvent } from "@/lib/audit";
 
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,7 +17,7 @@ export async function POST(
     const roleErr = requireRole(payload.role, ["SUPER_ADMIN", "ADMIN"]);
     if (roleErr) return roleErr;
 
-    const targetUserId = params.id;
+    const targetUserId = resolvedParams.id;
     const targetUser = await prisma.user.findUnique({
       where: { id: targetUserId },
       include: { companyRef: true },

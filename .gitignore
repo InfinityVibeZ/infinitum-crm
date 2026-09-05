@@ -26,10 +26,6 @@ yarn-debug.log*
 yarn-error.log*
 build-output*.txt
 
-# local env files
-.env
-.env*.local
-
 # local tool artifacts
 .agents/
 .claude/

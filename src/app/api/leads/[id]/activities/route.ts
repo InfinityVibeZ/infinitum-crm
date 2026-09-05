@@ -5,7 +5,8 @@ import { extractTokenFromRequest, getTokenPayload, getTenantWhereClauseAsync } f
 import { ActivityType, LeadStatus } from "@prisma/client";
 import { recordLeadStatusTransition } from "@/lib/leads";
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -14,7 +15,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     const tenantFilter = await getTenantWhereClauseAsync(payload);
     const lead = await prisma.lead.findFirst({
-      where: { id: params.id, ...tenantFilter },
+      where: { id: resolvedParams.id, ...tenantFilter },
       select: {
         id: true,
         firstName: true,
@@ -32,18 +33,18 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     const [activities, statusHistory, payments] = await Promise.all([
       prisma.activity.findMany({
-        where: { leadId: params.id },
+        where: { leadId: resolvedParams.id },
         orderBy: { createdAt: "desc" },
       }),
       prisma.leadStatusHistory.findMany({
-        where: { leadId: params.id },
+        where: { leadId: resolvedParams.id },
         include: {
           user: { select: { id: true, name: true, email: true } },
         },
         orderBy: { changedAt: "desc" },
       }),
       prisma.leadPayment.findMany({
-        where: { leadId: params.id, status: "PAID" },
+        where: { leadId: resolvedParams.id, status: "PAID" },
         orderBy: { paymentDate: "desc" },
       }),
     ]);
@@ -60,7 +61,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -68,7 +70,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (!payload) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const tenantFilter = await getTenantWhereClauseAsync(payload);
-    const lead = await prisma.lead.findFirst({ where: { id: params.id, ...tenantFilter }, select: { id: true } });
+    const lead = await prisma.lead.findFirst({ where: { id: resolvedParams.id, ...tenantFilter }, select: { id: true } });
     if (!lead) {
       return NextResponse.json({ error: "Lead not found or unauthorized" }, { status: 404 });
     }
@@ -125,7 +127,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         nextFollowUpTime: nextFollowUpTime || null,
         nextFollowUpType: nextFollowUpType || null,
         reminder: reminder || null,
-        leadId: params.id,
+        leadId: resolvedParams.id,
         userId: payload.userId,
         companyId: payload.companyId as string,
       },
@@ -133,7 +135,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     // Update Lead lastActivity
     await prisma.lead.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: { lastActivity: actDate },
     });
 
@@ -151,7 +153,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       ];
       if (validStatuses.includes(newStatus as LeadStatus)) {
         await recordLeadStatusTransition({
-          leadId: params.id,
+          leadId: resolvedParams.id,
           toStatus: newStatus as LeadStatus,
           userId: payload.userId,
           activityId: newActivity.id,
@@ -167,7 +169,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -175,7 +178,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     if (!payload) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const tenantFilter = await getTenantWhereClauseAsync(payload);
-    const lead = await prisma.lead.findFirst({ where: { id: params.id, ...tenantFilter }, select: { id: true } });
+    const lead = await prisma.lead.findFirst({ where: { id: resolvedParams.id, ...tenantFilter }, select: { id: true } });
     if (!lead) {
       return NextResponse.json({ error: "Lead not found or unauthorized" }, { status: 404 });
     }
@@ -202,7 +205,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     // Ensure the activity being edited actually belongs to this (tenant-verified) lead
     const existingActivity = await prisma.activity.findFirst({
-      where: { id: activityId, leadId: params.id },
+      where: { id: activityId, leadId: resolvedParams.id },
       select: { id: true },
     });
     if (!existingActivity) {
@@ -259,7 +262,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       ];
       if (validStatuses.includes(newStatus as LeadStatus)) {
         await recordLeadStatusTransition({
-          leadId: params.id,
+          leadId: resolvedParams.id,
           toStatus: newStatus as LeadStatus,
           userId: payload.userId,
           activityId: updatedActivity.id,
@@ -275,7 +278,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -283,7 +287,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     if (!payload) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const tenantFilter = await getTenantWhereClauseAsync(payload);
-    const lead = await prisma.lead.findFirst({ where: { id: params.id, ...tenantFilter }, select: { id: true } });
+    const lead = await prisma.lead.findFirst({ where: { id: resolvedParams.id, ...tenantFilter }, select: { id: true } });
     if (!lead) {
       return NextResponse.json({ error: "Lead not found or unauthorized" }, { status: 404 });
     }
@@ -296,7 +300,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     }
 
     const existingActivity = await prisma.activity.findFirst({
-      where: { id: activityId, leadId: params.id },
+      where: { id: activityId, leadId: resolvedParams.id },
       select: { id: true },
     });
     if (!existingActivity) {

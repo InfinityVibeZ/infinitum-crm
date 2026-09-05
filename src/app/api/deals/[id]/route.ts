@@ -4,10 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { extractTokenFromRequest, getTokenPayload, getTenantWhereClause } from "@/lib/auth";
 import { logAuditEvent, getIpFromRequest } from "@/lib/audit";
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,7 +15,7 @@ export async function GET(
     const tenantFilter = getTenantWhereClause(payload);
 
     const deal = await prisma.deal.findFirst({
-      where: { id: params.id, ...tenantFilter },
+      where: { id: resolvedParams.id, ...tenantFilter },
       include: {
         lead: true,
         user: {
@@ -42,10 +40,8 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -70,7 +66,7 @@ export async function PUT(
     } = body;
 
     const currentDeal = await prisma.deal.findFirst({
-      where: { id: params.id, ...tenantFilter },
+      where: { id: resolvedParams.id, ...tenantFilter },
     });
 
     if (!currentDeal) {
@@ -82,7 +78,7 @@ export async function PUT(
     const weightedValue = (newValue * newProb) / 100;
 
     const updatedDeal = await prisma.deal.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: {
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
@@ -134,10 +130,8 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -147,7 +141,7 @@ export async function DELETE(
     const tenantFilter = getTenantWhereClause(payload);
 
     const existingDeal = await prisma.deal.findFirst({
-      where: { id: params.id, ...tenantFilter },
+      where: { id: resolvedParams.id, ...tenantFilter },
     });
     
     if (!existingDeal) {
@@ -155,7 +149,7 @@ export async function DELETE(
     }
 
     await prisma.deal.delete({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
     });
 
     // Audit log

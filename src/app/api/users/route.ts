@@ -156,7 +156,7 @@ export async function GET(request: Request) {
           orderBy: { createdAt: "desc" },
         }),
         prisma.invitationToken.findMany({
-          select: { userId: true, status: true, expiresAt: true },
+          select: { userId: true, expiresAt: true },
           orderBy: { createdAt: "desc" },
         }),
       ]);
@@ -164,7 +164,7 @@ export async function GET(request: Request) {
       // Build invitation token map once
       const latestTokenByUser = new Map<
         string,
-        { status: string; expiresAt: Date }
+        { expiresAt: Date }
       >();
       const now = new Date();
       for (const t of invitationTokens) {
@@ -179,7 +179,7 @@ export async function GET(request: Request) {
         const isExpired =
           u.status === "PENDING" &&
           !!latest &&
-          (latest.status === "EXPIRED" || latest.expiresAt < now);
+          (latest.expiresAt < now);
         isInvitationExpiredMap.set(u.id, isExpired);
       });
 
@@ -272,7 +272,7 @@ export async function GET(request: Request) {
           orderBy: { createdAt: "desc" },
         }),
         prisma.invitationToken.findMany({
-          select: { userId: true, status: true, expiresAt: true },
+          select: { userId: true, expiresAt: true },
           orderBy: { createdAt: "desc" },
         }),
       ]);
@@ -291,7 +291,7 @@ export async function GET(request: Request) {
       // Build invitation token map
       const latestTokenByUser = new Map<
         string,
-        { status: string; expiresAt: Date }
+        { expiresAt: Date }
       >();
       for (const t of invitationTokens) {
         if (!latestTokenByUser.has(t.userId)) {
@@ -305,7 +305,7 @@ export async function GET(request: Request) {
         const isInvitationExpired =
           u.status === "PENDING" &&
           !!latest &&
-          (latest.status === "EXPIRED" || latest.expiresAt < now);
+          (latest.expiresAt < now);
         return {
           ...u,
           createdByName: u.createdBy
@@ -375,7 +375,7 @@ export async function GET(request: Request) {
         orderBy: { createdAt: "desc" },
       }),
       prisma.invitationToken.findMany({
-        select: { userId: true, status: true, expiresAt: true },
+        select: { userId: true, expiresAt: true },
         orderBy: { createdAt: "desc" },
       }),
     ]);
@@ -383,7 +383,7 @@ export async function GET(request: Request) {
     // Build invitation token map
     const latestTokenByUser = new Map<
       string,
-      { status: string; expiresAt: Date }
+      { expiresAt: Date }
     >();
     const now = new Date();
     for (const t of invitationTokens) {
@@ -412,7 +412,7 @@ export async function GET(request: Request) {
       const isInvitationExpired =
         u.status === "PENDING" &&
         !!latest &&
-        (latest.status === "EXPIRED" || latest.expiresAt < now);
+        (latest.expiresAt < now);
       return { ...u, isInvitationExpired };
     });
 

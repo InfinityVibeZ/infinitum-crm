@@ -4,7 +4,7 @@ import { extractTokenFromRequest, getTokenPayload, requireRole } from "@/lib/aut
 import { logAuditEvent } from "@/lib/audit";
 
 interface RouteContext {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 /** PUT /api/companies/[id] — Update company details (Superadmin only) */
@@ -18,17 +18,18 @@ export async function PUT(request: Request, { params }: RouteContext) {
     const roleError = requireRole(payload.role, ["SUPER_ADMIN"]);
     if (roleError) return roleError;
 
+    const { id } = await params;
     const body = await request.json();
     const { name, category, status } = body;
 
-    const existing = await (prisma as any).company.findUnique({ where: { id: params.id } });
+    const existing = await (prisma as any).company.findUnique({ where: { id: id } });
     if (!existing) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
     const companyStatus = status ? status : existing.status;
     const isActive = companyStatus === "ACTIVE";
 
     const updated = await (prisma as any).company.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         ...(name && { name: name.trim() }),
         ...(category !== undefined && { category: category ? category.trim() : null }),
@@ -39,7 +40,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
     if (name && name.trim() !== existing.name) {
       await prisma.user.updateMany({
-        where: { companyId: params.id },
+        where: { companyId: id },
         data: { company: name.trim() },
       });
     }
@@ -73,15 +74,16 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const roleError = requireRole(payload.role, ["SUPER_ADMIN"]);
     if (roleError) return roleError;
 
+    const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const { action } = body;
 
-    const existing = await (prisma as any).company.findUnique({ where: { id: params.id } });
+    const existing = await (prisma as any).company.findUnique({ where: { id: id } });
     if (!existing) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
     if (action === "restore") {
       const restored = await (prisma as any).company.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           isDeleted: false,
           deletedAt: null,
@@ -107,7 +109,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const nextStatus = nextActive ? "ACTIVE" : "INACTIVE";
 
     const updated = await (prisma as any).company.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         isActive: nextActive,
         status: nextStatus,
@@ -119,7 +121,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       await prisma.user.updateMany({
         where: {
           OR: [
-            { companyId: params.id },
+            { companyId: id },
             { company: existing.name },
           ],
         },
@@ -161,17 +163,18 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     const roleError = requireRole(payload.role, ["SUPER_ADMIN"]);
     if (roleError) return roleError;
 
+    const { id } = await params;
     const url = new URL(request.url);
     const hardDelete = url.searchParams.get("hard") === "true";
     const restore = url.searchParams.get("restore") === "true";
 
-    const company = await (prisma as any).company.findUnique({ where: { id: params.id } });
+    const company = await (prisma as any).company.findUnique({ where: { id: id } });
     if (!company) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
     // Restore request
     if (restore) {
       const restored = await (prisma as any).company.update({
-        where: { id: params.id },
+        where: { id: id },
         data: { isDeleted: false, deletedAt: null },
       });
 
@@ -196,7 +199,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       where: {
         isDeleted: false,
         OR: [
-          { companyId: params.id },
+          { companyId: id },
           { company: { equals: company.name, mode: "insensitive" } },
         ],
       },
@@ -214,7 +217,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     if (hardDelete) {
       // Unlink users associated with this company
       await prisma.user.updateMany({
-        where: { companyId: params.id },
+        where: { companyId: id },
         data: { companyId: null, company: null, department: null },
       });
       await prisma.user.updateMany({
@@ -222,7 +225,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
         data: { companyId: null, company: null, department: null },
       });
 
-      await (prisma as any).company.delete({ where: { id: params.id } });
+      await (prisma as any).company.delete({ where: { id: id } });
 
       await logAuditEvent({
         action: "COMPANY_DELETED_PERMANENTLY",
@@ -240,7 +243,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
 
     // Soft delete
     const softDeleted = await (prisma as any).company.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         isDeleted: true,
         deletedAt: new Date(),

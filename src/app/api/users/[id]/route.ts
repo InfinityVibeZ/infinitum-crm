@@ -7,7 +7,7 @@ import { sendPasswordResetEmail } from "@/lib/mail";
 import type { Role, UserStatus } from "@prisma/client";
 
 interface RouteContext {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 async function syncCompanyStatus(companyId?: string | null, companyName?: string | null) {
@@ -58,8 +58,10 @@ export async function GET(request: Request, { params }: RouteContext) {
     const roleError = requireRole(payload.role, ["SUPER_ADMIN", "ADMIN"]);
     if (roleError) return roleError;
 
+    const { id } = await params;
+
     const user = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: {
         id: true, name: true, email: true, role: true, status: true,
         department: true, category: true, company: true, companyId: true, phone: true, avatarUrl: true,
@@ -101,8 +103,10 @@ export async function PUT(request: Request, { params }: RouteContext) {
       updateRole = role as Role;
     }
 
+    const { id } = await params;
+
     const currentUser = await prisma.user.findUnique({
-      where: { id: params.id }
+      where: { id }
     });
     if (!currentUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -161,7 +165,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
     }
 
     const updated = await prisma.user.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(name && { name }),
         ...(phone !== undefined && { phone: phone ? phone.replace(/[^0-9+\-\s()]/g, "").slice(0, 15) : null }),
@@ -188,7 +192,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
       await prisma.user.updateMany({
         where: {
           OR: [
-            { createdBy: params.id },
+            { createdBy: id },
             ...(resolvedCompanyId ? [{ companyId: resolvedCompanyId, role: "USER" as Role }] : []),
           ],
         },
@@ -198,7 +202,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
       await prisma.user.updateMany({
         where: {
           OR: [
-            { createdBy: params.id },
+            { createdBy: id },
             ...(resolvedCompanyId ? [{ companyId: resolvedCompanyId, role: "USER" as Role }] : []),
           ],
           isDeleted: false,
@@ -230,7 +234,9 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     const roleError = requireRole(payload.role, ["SUPER_ADMIN", "ADMIN"]);
     if (roleError) return roleError;
 
-    if (params.id === payload.userId) {
+    const { id } = await params;
+
+    if (id === payload.userId) {
       return NextResponse.json({ error: "Cannot remove your own account" }, { status: 400 });
     }
 
@@ -238,7 +244,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     const hardDelete = url.searchParams.get("hard") === "true";
     const restore = url.searchParams.get("restore") === "true";
 
-    const targetUser = await prisma.user.findUnique({ where: { id: params.id } });
+    const targetUser = await prisma.user.findUnique({ where: { id } });
     if (!targetUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     if (payload.role === "ADMIN" && targetUser.createdBy !== payload.userId) {
@@ -264,7 +270,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     // Restore soft-deleted user
     if (restore) {
       const restored = await prisma.user.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           isDeleted: false,
           deletedAt: null,
@@ -294,7 +300,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
         return NextResponse.json({ error: "Only Super Admins can permanently delete accounts" }, { status: 403 });
       }
 
-      await prisma.user.delete({ where: { id: params.id } });
+      await prisma.user.delete({ where: { id } });
 
       await logAuditEvent({
         action: "USER_DELETED_PERMANENTLY",
@@ -313,7 +319,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     // Default: Soft Delete (Move to archive / trash)
     // Preserve original status - only mark as deleted via isDeleted flag
     const softDeleted = await prisma.user.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         isDeleted: true,
         deletedAt: new Date(),
@@ -334,7 +340,9 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     });
 
     return NextResponse.json({ message: "User moved to archive", user: softDeleted });
-  } catch {
+  } catch (err) {
+    console.error("DELETE /api/users/[id] error:", err);
+    require("fs").writeFileSync("d:/CRM/delete_error.log", err instanceof Error ? err.stack || err.message : String(err));
     return NextResponse.json({ error: "Failed to process user deletion" }, { status: 500 });
   }
 }
@@ -353,9 +361,11 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const body = await request.json();
     const { action } = body;
 
+    const { id } = await params;
+
     if (action === "restore") {
       if (payload.role === "ADMIN") {
-        const targetUser = await prisma.user.findUnique({ where: { id: params.id }, select: { createdBy: true } });
+        const targetUser = await prisma.user.findUnique({ where: { id }, select: { createdBy: true } });
         if (!targetUser || targetUser.createdBy !== payload.userId) {
           return NextResponse.json({ error: "Unauthorized access to this user" }, { status: 403 });
         }
@@ -363,7 +373,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
       // Restore user: preserve original status, only reset isDeleted flag
       const restored = await prisma.user.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           isDeleted: false,
           deletedAt: null,
@@ -392,7 +402,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       // Admin/Super Admin never creates or sees the user's password.
       // Instead, dispatch a secure 24-hour PASSWORD_RESET link to the user's registered email.
       const targetUser = await prisma.user.findUnique({
-        where: { id: params.id },
+        where: { id },
         select: { id: true, name: true, email: true, role: true, companyId: true, isDeleted: true },
       });
       if (!targetUser || targetUser.isDeleted) {
@@ -400,7 +410,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       }
 
       if (payload.role === "ADMIN") {
-        const currentUser = await prisma.user.findUnique({ where: { id: params.id } });
+        const currentUser = await prisma.user.findUnique({ where: { id } });
         if (!currentUser || currentUser.createdBy !== payload.userId) {
           return NextResponse.json({ error: "Unauthorized access to this user" }, { status: 403 });
         }
@@ -453,7 +463,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       }
 
       const user = await prisma.user.findUnique({
-        where: { id: params.id },
+        where: { id },
         select: { id: true, name: true, email: true, role: true, isActive: true, status: true, companyId: true, company: true, createdBy: true },
       });
       if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -476,7 +486,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       }
 
       const updated = await prisma.user.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           isActive: nextIsActive,
           status: nextStatus,
@@ -491,7 +501,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         const cascadeResult = await prisma.user.updateMany({
           where: {
             OR: [
-              { createdBy: params.id },
+              { createdBy: id },
               ...(updated.companyId ? [{ companyId: updated.companyId, role: "USER" as Role }] : []),
             ],
           },
@@ -502,7 +512,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         const cascadeResult = await prisma.user.updateMany({
           where: {
             OR: [
-              { createdBy: params.id },
+              { createdBy: id },
               ...(updated.companyId ? [{ companyId: updated.companyId, role: "USER" as Role }] : []),
             ],
             isDeleted: false,
