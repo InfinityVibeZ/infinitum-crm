@@ -1,4 +1,3 @@
-import { hasFeature } from "@/lib/subscription";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractTokenFromRequest, getTokenPayload, getTenantWhereClauseAsync } from "@/lib/auth";
@@ -119,9 +118,6 @@ export async function PUT(
 
     // Handle follow-ups updates if provided
     if (followUps !== undefined && Array.isArray(followUps)) {
-      if (!(await hasFeature(payload.companyId, "FOLLOW_UPS"))) {
-        return NextResponse.json({ error: "FEATURE_NOT_AVAILABLE", featureCode: "FOLLOW_UPS" }, { status: 403 });
-      }
       for (const fu of followUps) {
         const existing = await prisma.followUp.findFirst({
           where: { leadId: params.id, number: fu.number },
@@ -146,7 +142,6 @@ export async function PUT(
               dueDate: new Date(),
               followUpType: "OTHER",
               status: fu.completed ? "COMPLETED" : "PENDING",
-              companyId: payload.companyId as string,
             },
           });
         }
@@ -212,7 +207,6 @@ export async function PUT(
           changedAt: new Date(),
           reason: body.reason || "Manual Status Update",
           lostReason: body.lostReason || null,
-          companyId: payload.companyId as string,
         },
       });
     }

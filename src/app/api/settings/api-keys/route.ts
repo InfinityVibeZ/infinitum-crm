@@ -1,4 +1,3 @@
-import { hasFeature } from "@/lib/subscription";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractTokenFromRequest, getTokenPayload, requireRole } from "@/lib/auth";

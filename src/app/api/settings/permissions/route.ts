@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { extractTokenFromRequest, getTokenPayload, requireRole } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
 import { DEFAULT_PAGE_PERMISSIONS as DEFAULT_PERMISSIONS } from "@/lib/permissions";
-import { hasFeature } from "@/lib/subscription";
 
 /** GET /api/settings/permissions — Fetch dynamic role permissions */
 export async function GET(request: Request) {
@@ -50,10 +49,6 @@ export async function POST(request: Request) {
 
     const payload = getTokenPayload(token);
     if (!payload) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-
-    if (!(await hasFeature(payload.companyId, "ADVANCED_PERMISSIONS"))) {
-      return NextResponse.json({ error: "FEATURE_NOT_AVAILABLE", featureCode: "ADVANCED_PERMISSIONS" }, { status: 403 });
-    }
 
     const roleError = requireRole(payload.role, ["SUPER_ADMIN"]);
     if (roleError) return roleError;
