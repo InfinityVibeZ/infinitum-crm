@@ -3,13 +3,17 @@ import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
 import type { Role } from "@prisma/client";
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-change-me";
+const JWT_SECRET = process.env.JWT_SECRET as string;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is missing");
+}
 
 export interface JWTPayload {
   userId: string;
   email: string;
   role: string;
   name: string;
+  companyId?: string;
   permissions?: Record<string, boolean>;
 }
 
@@ -46,6 +50,7 @@ export async function registerUser(
     email: user.email,
     role: user.role,
     name: user.name || user.email,
+    companyId: user.companyId || undefined,
   });
 
   return { user, token };
@@ -163,14 +168,16 @@ export function getTokenPayload(token: string): JWTPayload | null {
 
 /** RLS Helper: Get Prisma `where` clause for entity tables (Leads, Deals, Documents, etc.) based on tenant logic. */
 export function getTenantWhereClause(payload: JWTPayload | null) {
-  if (!payload) return { id: "UNAUTHORIZED" }; // Failsafe
+  if (!payload) return { id: "UNAUTHORIZED" }; 
   
   if (payload.role === "SUPER_ADMIN") {
-    return {}; // Super Admin sees all
+    return {}; 
   }
   
   if (payload.role === "ADMIN") {
-    // Admin sees their own data, and data of users they created
+    if (payload.companyId) {
+      return { companyId: payload.companyId };
+    }
     return {
       OR: [
         { userId: payload.userId },
@@ -179,19 +186,24 @@ export function getTenantWhereClause(payload: JWTPayload | null) {
     };
   }
   
-  // Regular USER sees only their own data
+  if (payload.companyId) {
+    return { companyId: payload.companyId, userId: payload.userId };
+  }
   return { userId: payload.userId };
 }
 
 /** RLS Helper (Async): Get Prisma `where` clause for entity tables based on company-wide tenant logic. */
 export async function getTenantWhereClauseAsync(payload: JWTPayload | null) {
-  if (!payload) return { id: "UNAUTHORIZED" }; // Failsafe
+  if (!payload) return { id: "UNAUTHORIZED" }; 
   
   if (payload.role === "SUPER_ADMIN") {
-    return {}; // Super Admin sees all
+    return {}; 
   }
   
   if (payload.role === "ADMIN") {
+    if (payload.companyId) {
+      return { companyId: payload.companyId };
+    }
     const adminUser = await prisma.user.findUnique({
       where: { id: payload.userId },
       select: { id: true, company: true, companyId: true, department: true }
@@ -207,17 +219,20 @@ export async function getTenantWhereClauseAsync(payload: JWTPayload | null) {
 
     if (companyId) {
       orConditions.push({ user: { companyId } });
+      orConditions.push({ companyId });
     }
 
     if (companyName && companyName.trim() !== "") {
       orConditions.push({ user: { company: { equals: companyName, mode: "insensitive" } } });
-      orConditions.push({ company: { equals: companyName, mode: "insensitive" } });
+      orConditions.push({ company: { equals: companyName, mode: "insensitive" } }); // for models where company field exists
     }
 
     return { OR: orConditions };
   }
   
-  // Regular USER sees only their own data
+  if (payload.companyId) {
+    return { companyId: payload.companyId, userId: payload.userId };
+  }
   return { userId: payload.userId };
 }
 

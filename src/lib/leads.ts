@@ -18,7 +18,7 @@ export async function recordLeadStatusTransition({
 }) {
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, companyId: true },
   });
 
   if (!lead) return null;
@@ -45,6 +45,7 @@ export async function recordLeadStatusTransition({
       reason: reason || null,
       lostReason: lostReason || null,
       changedAt: new Date(),
+      companyId: lead.companyId,
     },
   });
 
