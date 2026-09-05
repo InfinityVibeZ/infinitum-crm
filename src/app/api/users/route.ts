@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { registerUser, extractTokenFromRequest, getTokenPayload, requireRole } from "@/lib/auth";
+import {
+  registerUser,
+  extractTokenFromRequest,
+  getTokenPayload,
+  requireRole,
+} from "@/lib/auth";
 import { createAccountSetupToken } from "@/lib/tokens";
 import { sendAdminInvitationEmail, sendUserInvitationEmail } from "@/lib/mail";
 import { logAuditEvent } from "@/lib/audit";
 import type { Role } from "@prisma/client";
 
-
-async function syncCompanyStatus(companyId?: string | null, companyName?: string | null) {
+async function syncCompanyStatus(
+  companyId?: string | null,
+  companyName?: string | null,
+) {
   if (!companyId && !companyName) return;
 
   try {
@@ -32,12 +39,18 @@ async function syncCompanyStatus(companyId?: string | null, companyName?: string
     if (companyId) {
       await companyModel.updateMany({
         where: { id: companyId },
-        data: { isActive: shouldBeActive, status: shouldBeActive ? "ACTIVE" : "INACTIVE" },
+        data: {
+          isActive: shouldBeActive,
+          status: shouldBeActive ? "ACTIVE" : "INACTIVE",
+        },
       });
     } else if (companyName) {
       await companyModel.updateMany({
         where: { name: { equals: companyName.trim(), mode: "insensitive" } },
-        data: { isActive: shouldBeActive, status: shouldBeActive ? "ACTIVE" : "INACTIVE" },
+        data: {
+          isActive: shouldBeActive,
+          status: shouldBeActive ? "ACTIVE" : "INACTIVE",
+        },
       });
     }
   } catch (err) {
@@ -51,7 +64,10 @@ export async function GET(request: Request) {
   try {
     const token = extractTokenFromRequest(request);
     if (!token) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 },
+      );
     }
     const payload = getTokenPayload(token);
     if (!payload) {
@@ -60,7 +76,9 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const grouped = searchParams.get("grouped") === "true";
-    const archived = searchParams.get("archived") === "true" || searchParams.get("deleted") === "true";
+    const archived =
+      searchParams.get("archived") === "true" ||
+      searchParams.get("deleted") === "true";
     const activeOnly = searchParams.get("activeOnly") === "true";
 
     const isDeletedFilter = archived ? true : false;
@@ -77,19 +95,31 @@ export async function GET(request: Request) {
       const orConditions: any[] = [{ id: payload.userId }];
       if (compId) orConditions.push({ companyId: compId });
       if (compName) {
-        orConditions.push({ company: { equals: compName, mode: "insensitive" } });
-        orConditions.push({ department: { equals: compName, mode: "insensitive" } });
+        orConditions.push({
+          company: { equals: compName, mode: "insensitive" },
+        });
+        orConditions.push({
+          department: { equals: compName, mode: "insensitive" },
+        });
       }
 
       const users = await prisma.user.findMany({
         where: {
           isDeleted: false,
           ...(activeOnly && { status: "ACTIVE" }),
-          OR: orConditions
+          OR: orConditions,
         },
         select: {
-          id: true, name: true, email: true, role: true, status: true, isActive: true,
-          avatarUrl: true, company: true, companyId: true, department: true,
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+          isActive: true,
+          avatarUrl: true,
+          company: true,
+          companyId: true,
+          department: true,
         },
         orderBy: { name: "asc" },
       });
@@ -106,10 +136,22 @@ export async function GET(request: Request) {
         prisma.user.findMany({
           where: { isDeleted: isDeletedFilter },
           select: {
-            id: true, name: true, email: true, role: true,
-            status: true, isActive: true, isDeleted: true, deletedAt: true, lastLogin: true,
-            createdAt: true, phone: true, department: true, category: true,
-            createdBy: true, company: true, companyId: true,
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            status: true,
+            isActive: true,
+            isDeleted: true,
+            deletedAt: true,
+            lastLogin: true,
+            createdAt: true,
+            phone: true,
+            department: true,
+            category: true,
+            createdBy: true,
+            company: true,
+            companyId: true,
           },
           orderBy: { createdAt: "desc" },
         }),
@@ -120,7 +162,10 @@ export async function GET(request: Request) {
       ]);
 
       // Build invitation token map once
-      const latestTokenByUser = new Map<string, { status: string; expiresAt: Date }>();
+      const latestTokenByUser = new Map<
+        string,
+        { status: string; expiresAt: Date }
+      >();
       const now = new Date();
       for (const t of invitationTokens) {
         if (!latestTokenByUser.has(t.userId)) {
@@ -131,11 +176,16 @@ export async function GET(request: Request) {
       const isInvitationExpiredMap = new Map<string, boolean>();
       allUsers.forEach((u) => {
         const latest = latestTokenByUser.get(u.id);
-        const isExpired = u.status === "PENDING" && !!latest && (latest.status === "EXPIRED" || latest.expiresAt < now);
+        const isExpired =
+          u.status === "PENDING" &&
+          !!latest &&
+          (latest.status === "EXPIRED" || latest.expiresAt < now);
         isInvitationExpiredMap.set(u.id, isExpired);
       });
 
-      const adminUsers = allUsers.filter((u) => u.role === "SUPER_ADMIN" || u.role === "ADMIN");
+      const adminUsers = allUsers.filter(
+        (u) => u.role === "SUPER_ADMIN" || u.role === "ADMIN",
+      );
       const regularUsers = allUsers.filter((u) => u.role === "USER");
 
       const adminMap = new Map<string, any>();
@@ -151,7 +201,10 @@ export async function GET(request: Request) {
       const unassignedUsers: any[] = [];
 
       regularUsers.forEach((u) => {
-        const userWithStatus = { ...u, isInvitationExpired: isInvitationExpiredMap.get(u.id) ?? false };
+        const userWithStatus = {
+          ...u,
+          isInvitationExpired: isInvitationExpiredMap.get(u.id) ?? false,
+        };
         if (u.createdBy && adminMap.has(u.createdBy)) {
           const adminGroup = adminMap.get(u.createdBy);
           adminGroup.users.push(userWithStatus);
@@ -166,8 +219,12 @@ export async function GET(request: Request) {
       if (unassignedUsers.length > 0) {
         const superAdminGroup = result.find((g) => g.role === "SUPER_ADMIN");
         if (superAdminGroup) {
-          const existingIds = new Set(superAdminGroup.users.map((u: any) => u.id));
-          const uniqueUnassigned = unassignedUsers.filter((u) => !existingIds.has(u.id));
+          const existingIds = new Set(
+            superAdminGroup.users.map((u: any) => u.id),
+          );
+          const uniqueUnassigned = unassignedUsers.filter(
+            (u) => !existingIds.has(u.id),
+          );
           superAdminGroup.users.push(...uniqueUnassigned);
           superAdminGroup.userCount = superAdminGroup.users.length;
         }
@@ -178,7 +235,10 @@ export async function GET(request: Request) {
         isInvitationExpired: isInvitationExpiredMap.get(u.id) ?? false,
       }));
 
-      const groupedRes = NextResponse.json({ admins: result, allUsers: annotatedAllUsers });
+      const groupedRes = NextResponse.json({
+        admins: result,
+        allUsers: annotatedAllUsers,
+      });
       groupedRes.headers.set("Cache-Control", "no-store");
       return groupedRes;
     }
@@ -190,11 +250,24 @@ export async function GET(request: Request) {
         prisma.user.findMany({
           where: { isDeleted: isDeletedFilter },
           select: {
-            id: true, name: true, email: true, role: true,
-            status: true, department: true, category: true, company: true, companyId: true,
-            phone: true, avatarUrl: true, modules: true,
-            createdBy: true, lastLogin: true, createdAt: true,
-            isActive: true, isDeleted: true, deletedAt: true,
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            status: true,
+            department: true,
+            category: true,
+            company: true,
+            companyId: true,
+            phone: true,
+            avatarUrl: true,
+            modules: true,
+            createdBy: true,
+            lastLogin: true,
+            createdAt: true,
+            isActive: true,
+            isDeleted: true,
+            deletedAt: true,
           },
           orderBy: { createdAt: "desc" },
         }),
@@ -216,7 +289,10 @@ export async function GET(request: Request) {
       });
 
       // Build invitation token map
-      const latestTokenByUser = new Map<string, { status: string; expiresAt: Date }>();
+      const latestTokenByUser = new Map<
+        string,
+        { status: string; expiresAt: Date }
+      >();
       for (const t of invitationTokens) {
         if (!latestTokenByUser.has(t.userId)) {
           latestTokenByUser.set(t.userId, t);
@@ -226,10 +302,15 @@ export async function GET(request: Request) {
       const now = new Date();
       const enriched = allUsers.map((u) => {
         const latest = latestTokenByUser.get(u.id);
-        const isInvitationExpired = u.status === "PENDING" && !!latest && (latest.status === "EXPIRED" || latest.expiresAt < now);
+        const isInvitationExpired =
+          u.status === "PENDING" &&
+          !!latest &&
+          (latest.status === "EXPIRED" || latest.expiresAt < now);
         return {
           ...u,
-          createdByName: u.createdBy ? (creatorMap.get(u.createdBy) ?? "—") : "—",
+          createdByName: u.createdBy
+            ? (creatorMap.get(u.createdBy) ?? "—")
+            : "—",
           isInvitationExpired,
         };
       });
@@ -246,15 +327,20 @@ export async function GET(request: Request) {
     });
 
     const adminCompId = (payload as any).companyId || adminUser?.companyId;
-    const adminCompName = (payload as any).company || adminUser?.company || adminUser?.department;
+    const adminCompName =
+      (payload as any).company || adminUser?.company || adminUser?.department;
 
     const adminOrConditions: any[] = [{ createdBy: payload.userId }];
     if (adminCompId) {
       adminOrConditions.push({ companyId: adminCompId });
     }
     if (adminCompName) {
-      adminOrConditions.push({ company: { equals: adminCompName, mode: "insensitive" } });
-      adminOrConditions.push({ department: { equals: adminCompName, mode: "insensitive" } });
+      adminOrConditions.push({
+        company: { equals: adminCompName, mode: "insensitive" },
+      });
+      adminOrConditions.push({
+        department: { equals: adminCompName, mode: "insensitive" },
+      });
     }
 
     // OPTIMIZED: fetch users and tokens in parallel
@@ -267,11 +353,24 @@ export async function GET(request: Request) {
           OR: adminOrConditions,
         },
         select: {
-          id: true, name: true, email: true, role: true,
-          status: true, department: true, category: true, company: true, companyId: true,
-          phone: true, avatarUrl: true, modules: true,
-          createdBy: true, lastLogin: true, createdAt: true,
-          isActive: true, isDeleted: true, deletedAt: true,
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+          department: true,
+          category: true,
+          company: true,
+          companyId: true,
+          phone: true,
+          avatarUrl: true,
+          modules: true,
+          createdBy: true,
+          lastLogin: true,
+          createdAt: true,
+          isActive: true,
+          isDeleted: true,
+          deletedAt: true,
         },
         orderBy: { createdAt: "desc" },
       }),
@@ -282,7 +381,10 @@ export async function GET(request: Request) {
     ]);
 
     // Build invitation token map
-    const latestTokenByUser = new Map<string, { status: string; expiresAt: Date }>();
+    const latestTokenByUser = new Map<
+      string,
+      { status: string; expiresAt: Date }
+    >();
     const now = new Date();
     for (const t of invitationTokens) {
       if (!latestTokenByUser.has(t.userId)) {
@@ -307,7 +409,10 @@ export async function GET(request: Request) {
     // Add invitation status to each user
     const annotatedSortedUsers = sortedUsers.map((u) => {
       const latest = latestTokenByUser.get(u.id);
-      const isInvitationExpired = u.status === "PENDING" && !!latest && (latest.status === "EXPIRED" || latest.expiresAt < now);
+      const isInvitationExpired =
+        u.status === "PENDING" &&
+        !!latest &&
+        (latest.status === "EXPIRED" || latest.expiresAt < now);
       return { ...u, isInvitationExpired };
     });
 
@@ -316,7 +421,10 @@ export async function GET(request: Request) {
     return sortedRes;
   } catch (error) {
     console.error("GET /api/users error:", error);
-    return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch users" },
+      { status: 500 },
+    );
   }
 }
 
@@ -324,28 +432,52 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const token = extractTokenFromRequest(request);
-    if (!token) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    }
-    const payload = getTokenPayload(token);
-    if (!payload) {
+    const payload = token ? getTokenPayload(token) : null;
+    if (token && !payload) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    const roleError = requireRole(payload.role, ["SUPER_ADMIN", "ADMIN"]);
-    if (roleError) return roleError;
-
-    const body = await request.json();
-    const { name, email, phone, department, category, company, companyId, role, status, modules, assignedAdminId } = body;
-
-    if (!name || !email) {
-      return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
+    const isPublicRegistration = !payload;
+    if (!isPublicRegistration) {
+      const roleError = requireRole(payload.role, ["SUPER_ADMIN", "ADMIN"]);
+      if (roleError) return roleError;
     }
 
-    let assignedRole: Role = "USER";
-    if (payload.role === "SUPER_ADMIN" && role && ["SUPER_ADMIN", "ADMIN", "USER"].includes(role)) {
+    const body = await request.json();
+    const {
+      name,
+      email,
+      phone,
+      department,
+      category,
+      company,
+      companyId,
+      role,
+      status,
+      modules,
+      assignedAdminId,
+    } = body;
+
+    if (!name || !email) {
+      return NextResponse.json(
+        { error: "Name and email are required" },
+        { status: 400 },
+      );
+    }
+
+    let assignedRole: Role = isPublicRegistration ? "SUPER_ADMIN" : "USER";
+    if (
+      !isPublicRegistration &&
+      payload.role === "SUPER_ADMIN" &&
+      role &&
+      ["SUPER_ADMIN", "ADMIN", "USER"].includes(role)
+    ) {
       assignedRole = role as Role;
-    } else if (payload.role === "ADMIN" && role === "USER") {
+    } else if (
+      !isPublicRegistration &&
+      payload.role === "ADMIN" &&
+      role === "USER"
+    ) {
       assignedRole = "USER";
     }
 
@@ -353,11 +485,15 @@ export async function POST(request: Request) {
     let resolvedCompanyName: string | null = company || department || null;
 
     if (resolvedCompanyId) {
-      const comp = await (prisma as any).company.findUnique({ where: { id: resolvedCompanyId } });
+      const comp = await (prisma as any).company.findUnique({
+        where: { id: resolvedCompanyId },
+      });
       if (comp) resolvedCompanyName = comp.name;
     } else if (resolvedCompanyName && resolvedCompanyName.trim() !== "") {
       const comp = await (prisma as any).company.findFirst({
-        where: { name: { equals: resolvedCompanyName.trim(), mode: "insensitive" } },
+        where: {
+          name: { equals: resolvedCompanyName.trim(), mode: "insensitive" },
+        },
       });
       if (comp) {
         resolvedCompanyId = comp.id;
@@ -373,16 +509,23 @@ export async function POST(request: Request) {
           });
           resolvedCompanyId = newComp.id;
           resolvedCompanyName = newComp.name;
-        } catch (_) {}
+        } catch (_) { }
       }
     }
 
-    const creatorId = (payload.role === "SUPER_ADMIN" && assignedAdminId)
-      ? assignedAdminId
-      : payload.userId;
+    const creatorId =
+      !isPublicRegistration && payload.role === "SUPER_ADMIN" && assignedAdminId
+        ? assignedAdminId
+        : payload?.userId;
 
-    const initialTempPassword = generatePassword();
-    const { user } = await registerUser(email, initialTempPassword, name, assignedRole, creatorId);
+    const initialTempPassword = "12345678";
+    const { user } = await registerUser(
+      email,
+      initialTempPassword,
+      name,
+      assignedRole,
+      creatorId,
+    );
 
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
@@ -392,15 +535,22 @@ export async function POST(request: Request) {
         company: resolvedCompanyName || null,
         companyId: resolvedCompanyId || null,
         category: category || null,
-        status: "PENDING",
+        status: assignedRole === "SUPER_ADMIN" ? "ACTIVE" : "PENDING",
         modules: modules || null,
-
         isDeleted: false,
       },
       select: {
-        id: true, name: true, email: true, role: true,
-        status: true, department: true, category: true, company: true, companyId: true,
-        phone: true, createdAt: true,
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        department: true,
+        category: true,
+        company: true,
+        companyId: true,
+        phone: true,
+        createdAt: true,
       },
     });
 
@@ -411,7 +561,7 @@ export async function POST(request: Request) {
       userId: updatedUser.id,
       companyId: resolvedCompanyId,
       role: assignedRole,
-      createdBy: payload.userId,
+      createdBy: payload?.userId,
     });
 
     const host = request.headers.get("host") || "localhost:3000";
@@ -419,7 +569,7 @@ export async function POST(request: Request) {
     const baseUrl = `${protocol}://${host}`;
     const setupLink = `${baseUrl}/account/setup?token=${rawToken}`;
 
-    const targetCompanyName = resolvedCompanyName || "Infinitum";
+    const targetCompanyName = resolvedCompanyName || "Infinity Vibez";
 
     // Dispatch role-specific email
     let mailResult: { success: boolean; setupUrl: string; error?: any };
@@ -435,9 +585,11 @@ export async function POST(request: Request) {
         action: "ADMIN_CREATED",
         category: "Admin Management",
         severity: "INFO",
-        actorName: payload.name || payload.email,
-        actorEmail: payload.email,
-        actorRole: payload.role,
+        actorName:
+          payload?.name ||
+          (isPublicRegistration ? "Public registration" : "Unknown"),
+        actorEmail: payload?.email,
+        actorRole: payload?.role || "PUBLIC",
         targetName: `${name} (${email})`,
         summary: `Created Admin account for ${targetCompanyName} and sent invitation link`,
       });
@@ -453,26 +605,36 @@ export async function POST(request: Request) {
         action: "USER_CREATED",
         category: "User Management",
         severity: "INFO",
-        actorName: payload.name || payload.email,
-        actorEmail: payload.email,
-        actorRole: payload.role,
+        actorName:
+          payload?.name ||
+          (isPublicRegistration ? "Public registration" : "Unknown"),
+        actorEmail: payload?.email,
+        actorRole: payload?.role || "PUBLIC",
         targetName: `${name} (${email})`,
         summary: `Created User account for ${targetCompanyName} and sent invitation link`,
       });
     }
 
     if (!mailResult.success) {
-      const errDetail = mailResult.error instanceof Error ? mailResult.error.message : String(mailResult.error || "SMTP error");
+      const errDetail =
+        mailResult.error instanceof Error
+          ? mailResult.error.message
+          : String(mailResult.error || "SMTP error");
       console.error("[USER CREATION EMAIL ERROR]:", errDetail);
       return NextResponse.json(
-        { error: `Account created, but email delivery to ${email} failed: ${errDetail}` },
-        { status: 500 }
+        {
+          user: updatedUser,
+          setupLink,
+          warning: `Account created, but email delivery to ${email} failed: ${errDetail}`,
+        },
+        { status: 201 },
       );
     }
 
     return NextResponse.json({ user: updatedUser, setupLink }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create user";
+    const message =
+      error instanceof Error ? error.message : "Failed to create user";
     console.error("POST /api/users error:", error);
     return NextResponse.json({ error: message }, { status: 400 });
   }

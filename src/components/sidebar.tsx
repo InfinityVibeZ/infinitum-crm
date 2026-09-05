@@ -280,7 +280,7 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
       if (match) {
         try {
           return JSON.parse(decodeURIComponent(match[2]));
-        } catch (e) {}
+        } catch (e) { }
       }
     }
     return null;
@@ -314,7 +314,7 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
         }
         const match = document.cookie.match(new RegExp('(^| )nexus-role=([^;]+)'));
         if (match) return decodeURIComponent(match[2]);
-      } catch (e) {}
+      } catch (e) { }
     }
     return "USER";
   }, [user?.role]);
@@ -339,7 +339,7 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
 
           const dbAccess = activePermissions[item.href];
           const pageAccess = dbAccess !== undefined ? dbAccess : DEFAULT_PERMISSIONS[item.href];
-          
+
           if (pageAccess !== undefined && pageAccess !== null) {
             if (typeof pageAccess === "boolean") {
               // Cookie format: { "/path": true }
@@ -394,7 +394,7 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
             </div>
             <div className="flex flex-col">
               <span className="text-base font-extrabold text-nexus-text tracking-tight leading-none">
-                INFINITUM
+                INFINITY VIBEZ
               </span>
               <span className="text-[9px] font-bold text-[#10D078] tracking-widest uppercase mt-0.5">
                 CRM PLATFORM
@@ -422,7 +422,7 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
           </div>
           <div className="flex flex-col">
             <span className="text-base font-extrabold text-nexus-text tracking-tight leading-none">
-              INFINITUM
+              INFINITY VIBEZ
             </span>
             <span className="text-[9px] font-bold text-[#10D078] tracking-widest uppercase mt-0.5">
               CRM PLATFORM
@@ -437,11 +437,10 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
         <Link
           href={effectiveRole === "ADMIN" || effectiveRole === "USER" ? "/leads/metrics" : "/"}
           onClick={onClose}
-          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${
-            (effectiveRole === "ADMIN" || effectiveRole === "USER" ? pathname === "/leads/metrics" : pathname === "/")
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${(effectiveRole === "ADMIN" || effectiveRole === "USER" ? pathname === "/leads/metrics" : pathname === "/")
               ? "text-[#10D078] bg-[#10D078]/10"
               : "text-nexus-text-secondary hover:text-nexus-text hover:bg-nexus-hover"
-          }`}
+            }`}
         >
           <IconLayoutDashboard size={18} />
           <span className="hidden sm:inline">Dashboard</span>
@@ -460,11 +459,10 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
               <div key={section.label} className="pt-1">
                 <Link
                   href={item.href}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${
-                    isActive
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${isActive
                       ? "text-[#10D078] bg-[#10D078]/10 font-bold"
                       : "text-nexus-text-secondary hover:text-nexus-text hover:bg-nexus-hover"
-                  }`}
+                    }`}
                 >
                   {section.icon}
                   <span>{item.label}</span>
@@ -484,11 +482,10 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
               <button
                 type="button"
                 onClick={() => toggleSection(section.label)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold tracking-wider transition-colors ${
-                  isSectionActive
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold tracking-wider transition-colors ${isSectionActive
                     ? "text-[#10D078]"
                     : "text-nexus-text-secondary hover:text-nexus-text hover:bg-nexus-hover"
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2.5">
                   {section.icon}
@@ -511,11 +508,10 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
                       <Link
                         key={item.href}
                         href={item.href}
-                        className={`block px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                          isActive
+                        className={`block px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${isActive
                             ? "text-[#10D078] font-bold bg-[#10D078]/10"
                             : "text-nexus-text hover:bg-nexus-hover"
-                        }`}
+                          }`}
                       >
                         {item.label}
                       </Link>

@@ -11,7 +11,7 @@ function LoginForm() {
   const redirect = searchParams.get("redirect") || "/";
   const { setAuth } = useAuthStore();
 
-  const initialError = searchParams.get("msg") || (searchParams.get("deactivated") ? "You don't have access to this portal or application. Please contact the Infinitum team." : "");
+  const initialError = searchParams.get("msg") || (searchParams.get("deactivated") ? "You don't have access to this portal or application. Please contact the Infinity Vibez team." : "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -33,15 +33,7 @@ function LoginForm() {
     }
   }, []);
 
-  // Auto-hide error card after 5 seconds
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError("");
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
+
 
   const isEmailError = /email does not exist/i.test(error);
   const isPasswordError = /password is invalid/i.test(error);
@@ -74,7 +66,6 @@ function LoginForm() {
 
       setAuth(data.user, data.token);
       router.replace(redirect);
-      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -118,10 +109,10 @@ function LoginForm() {
             <IconInfinity size={32} stroke={2.5} />
           </div>
           <h1 className="text-2xl font-extrabold text-nexus-text tracking-tight">
-            Welcome to Infinitum
+            Welcome to Infinity Vibez
           </h1>
           <p className="text-nexus-text-secondary text-xs mt-1">
-            Sign in to your Infinitum CRM portal
+            Sign in to your Infinity Vibez CRM portal
           </p>
         </div>
 
@@ -163,11 +154,10 @@ function LoginForm() {
               }}
               placeholder="you@company.com"
               required
-              className={`w-full bg-nexus-bg border rounded-lg px-4 py-2.5 text-sm text-nexus-text placeholder:text-nexus-muted focus:outline-none focus:ring-1 ${
-                isEmailError
-                  ? "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20"
-                  : "border-nexus-border focus:border-nexus-primary/50 focus:ring-nexus-primary/20"
-              }`}
+              className={`w-full bg-nexus-bg border rounded-lg px-4 py-2.5 text-sm text-nexus-text placeholder:text-nexus-muted focus:outline-none focus:ring-1 ${isEmailError
+                ? "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20"
+                : "border-nexus-border focus:border-nexus-primary/50 focus:ring-nexus-primary/20"
+                }`}
             />
             {isEmailError && <p className="text-[11px] text-red-400 mt-1">{error}</p>}
           </div>
@@ -190,11 +180,10 @@ function LoginForm() {
                 }}
                 placeholder="••••••••"
                 required
-                className={`w-full bg-nexus-bg border rounded-lg pl-4 pr-10 py-2.5 text-sm text-nexus-text placeholder:text-nexus-muted focus:outline-none focus:ring-1 ${
-                  isPasswordError
-                    ? "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20"
-                    : "border-nexus-border focus:border-nexus-primary/50 focus:ring-nexus-primary/20"
-                }`}
+                className={`w-full bg-nexus-bg border rounded-lg pl-4 pr-10 py-2.5 text-sm text-nexus-text placeholder:text-nexus-muted focus:outline-none focus:ring-1 ${isPasswordError
+                  ? "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20"
+                  : "border-nexus-border focus:border-nexus-primary/50 focus:ring-nexus-primary/20"
+                  }`}
               />
               <button
                 type="button"

@@ -53,11 +53,11 @@ export async function GET(request: Request) {
                 expiredRecord.user.company ||
                 expiredRecord.user.companyRef?.name ||
                 expiredRecord.user.department ||
-                "Infinitum",
+                "Infinity Vibez",
             };
           }
         }
-      } catch (_) {}
+      } catch (_) { }
 
       return NextResponse.json(
         {
@@ -70,7 +70,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const companyName = user!.company || user!.companyRef?.name || user!.department || "Infinitum";
+    const companyName = user!.company || user!.companyRef?.name || user!.department || "Infinity Vibez";
 
     return NextResponse.json({
       valid: true,

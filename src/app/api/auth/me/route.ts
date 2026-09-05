@@ -62,8 +62,8 @@ export async function GET(request: Request) {
         }
       }
 
-      const userCompName = user.company || user.companyRef?.name || user.department || "Infinitum";
-      const targetTeamName = (isCompDeactivated || user.role !== "USER") ? "Infinitum" : userCompName;
+      const userCompName = user.company || user.companyRef?.name || user.department || "Infinity Vibez";
+      const targetTeamName = (isCompDeactivated || user.role !== "USER") ? "Infinity Vibez" : userCompName;
 
       if (isCompDeactivated || !user.isActive || user.status === "INACTIVE") {
         return NextResponse.json(

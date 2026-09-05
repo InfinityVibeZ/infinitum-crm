@@ -52,7 +52,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       if (res.status === 403 || res.status === 401) {
         const data = await res.json().catch(() => ({}));
-        const msg = data.message || data.error || "You don't have access to this portal or application. Please contact the Infinitum team.";
+        const msg = data.message || data.error || "You don't have access to this portal or application. Please contact the Infinity Vibez team.";
         await get().logout();
         if (typeof window !== "undefined") {
           sessionStorage.setItem("nexus-login-error", msg);
@@ -66,7 +66,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           get().setAuth(data.user, token);
         }
       }
-    } catch (_) {} finally {
+    } catch (_) { } finally {
       set({ isLoading: false });
     }
   },
@@ -82,7 +82,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Await server-side cookie clear before redirecting
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-    } catch (_) {}
+    } catch (_) { }
     set({ user: null, token: null, isLoading: false });
   },
   setLoading: (loading) => set({ isLoading: loading }),

@@ -14,7 +14,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Infinitum CRM",
+  title: "Infinity Vibez CRM",
   description: "Modern sales CRM for managing leads, deals, and revenue",
   icons: {
     icon: "/icon.svg",

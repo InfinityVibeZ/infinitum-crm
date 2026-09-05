@@ -319,34 +319,26 @@ model Company {
 // ─────────────────────────────────────────────────────────────
 
 model User {
-  id           String     @id @default(uuid()) @db.Uuid
-  email        String     @unique
-  name         String
-  passwordHash String     @map("password_hash")
-  role         Role       @default(USER)
-  status       UserStatus @default(ACTIVE)
-
-  // Deprecated display-only field.
-  // Authorization MUST use companyId.
-  company String?
-
-  companyId String? @map("company_id") @db.Uuid
-
-  phone      String?
-  department String?
-  category   String?
-  avatarUrl  String?   @map("avatar_url")
-  isActive   Boolean   @default(true) @map("is_active")
-  isDeleted  Boolean   @default(false) @map("is_deleted")
-  deletedAt  DateTime? @map("deleted_at")
-
-  modules Json?
-
-  createdBy String?   @map("created_by")
-  lastLogin DateTime? @map("last_login")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id            String      @id @default(uuid()) @db.Uuid
+  email         String      @unique
+  name          String
+  passwordHash  String      @map("password_hash")
+  role          Role        @default(USER)
+  status        UserStatus  @default(ACTIVE)
+  company       String?
+  companyId     String?     @map("company_id") @db.Uuid
+  phone         String?
+  department    String?
+  category      String?
+  avatarUrl     String?     @map("avatar_url")
+  isActive      Boolean     @default(true) @map("is_active")
+  isDeleted     Boolean     @default(false) @map("is_deleted")
+  deletedAt     DateTime?   @map("deleted_at")
+  modules       Json?       // array of permitted module names
+  createdBy     String?     @map("created_by")  // admin user id who created this user
+  lastLogin     DateTime?   @map("last_login")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
 
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 

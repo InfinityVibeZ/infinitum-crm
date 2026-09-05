@@ -26,7 +26,10 @@ function base64UrlDecodeToString(base64Url: string): string {
  * unlike Node's `jsonwebtoken`/`crypto`). Returns the decoded payload only if the signature
  * is valid and the token isn't expired — never trust an unverified decode for authorization.
  */
-async function verifyJwtEdge(token: string, secret: string): Promise<any | null> {
+async function verifyJwtEdge(
+  token: string,
+  secret: string,
+): Promise<any | null> {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
@@ -37,17 +40,23 @@ async function verifyJwtEdge(token: string, secret: string): Promise<any | null>
       new TextEncoder().encode(secret),
       { name: "HMAC", hash: "SHA-256" },
       false,
-      ["verify"]
+      ["verify"],
     );
 
     const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
     const signature = base64UrlToBytes(signatureB64);
 
-    const valid = await crypto.subtle.verify("HMAC", key, signature as BufferSource, data as BufferSource);
+    const valid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      signature as BufferSource,
+      data as BufferSource,
+    );
     if (!valid) return null;
 
     const payload = JSON.parse(base64UrlDecodeToString(payloadB64));
-    if (typeof payload.exp === "number" && Date.now() >= payload.exp * 1000) return null;
+    if (typeof payload.exp === "number" && Date.now() >= payload.exp * 1000)
+      return null;
 
     return payload;
   } catch {
@@ -70,9 +79,15 @@ export async function middleware(request: NextRequest) {
     "/api/auth/logout",
     "/api/cron",
   ];
-  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
+  const isPublicRoute = publicRoutes.some((route) =>
+    pathname.startsWith(route),
+  );
 
-  if (isPublicRoute) {
+  const isPublicRegistration =
+    pathname === "/register" ||
+    (pathname === "/api/users" && request.method === "POST");
+
+  if (isPublicRoute || isPublicRegistration) {
     return NextResponse.next();
   }
 
@@ -86,7 +101,7 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith("/api")) {
       return NextResponse.json(
         { error: "Authentication required" },
-        { status: 401 }
+        { status: 401 },
       );
     }
     return NextResponse.redirect(new URL("/login", request.url));
@@ -104,13 +119,18 @@ export async function middleware(request: NextRequest) {
   const userRole = payload.role;
 
   // Prevent Super Admin lockout of the permissions configuration routes
-  const isPermissionsRoute = pathname.startsWith("/admin/permissions") || pathname.startsWith("/api/settings/permissions");
+  const isPermissionsRoute =
+    pathname.startsWith("/admin/permissions") ||
+    pathname.startsWith("/api/settings/permissions");
   if (isPermissionsRoute && userRole === "SUPER_ADMIN") {
     return NextResponse.next();
   }
 
   // Allow all authenticated roles to access their own Change Password / security page
-  if (pathname.startsWith("/settings/security") || pathname.startsWith("/api/users/change-password")) {
+  if (
+    pathname.startsWith("/settings/security") ||
+    pathname.startsWith("/api/users/change-password")
+  ) {
     return NextResponse.next();
   }
 
@@ -125,14 +145,23 @@ export async function middleware(request: NextRequest) {
     "/admin/permissions",
     "/settings/api-keys",
     "/api/settings/api-keys",
-    "/register",
   ];
-  const isSuperAdminOnly = superAdminOnlyRoutes.some((route) => pathname.startsWith(route));
+  const isSuperAdminOnly = superAdminOnlyRoutes.some((route) =>
+    pathname.startsWith(route),
+  );
   if (isSuperAdminOnly && userRole !== "SUPER_ADMIN") {
     if (pathname.startsWith("/api")) {
-      return NextResponse.json({ error: "Forbidden: Super Admin access required" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Forbidden: Super Admin access required" },
+        { status: 403 },
+      );
     }
-    return NextResponse.redirect(new URL(`/access-denied?path=${encodeURIComponent(pathname)}`, request.url));
+    return NextResponse.redirect(
+      new URL(
+        `/access-denied?path=${encodeURIComponent(pathname)}`,
+        request.url,
+      ),
+    );
   }
 
   // 2. Dynamic Path-based Permissions Check
@@ -150,15 +179,22 @@ export async function middleware(request: NextRequest) {
       : getDefaultPermissionsForRole(userRole);
 
   // Direct page path match or sub-path match
-  const configPaths = Object.keys(permissions).sort((a, b) => b.length - a.length);
+  const configPaths = Object.keys(permissions).sort(
+    (a, b) => b.length - a.length,
+  );
   const matchedPath = configPaths.find(
-    (path) => pathname === path || pathname.startsWith(path + "/")
+    (path) => pathname === path || pathname.startsWith(path + "/"),
   );
 
   if (matchedPath) {
     const isAllowed = permissions[matchedPath];
     if (!isAllowed) {
-      return NextResponse.redirect(new URL(`/access-denied?path=${encodeURIComponent(pathname)}`, request.url));
+      return NextResponse.redirect(
+        new URL(
+          `/access-denied?path=${encodeURIComponent(pathname)}`,
+          request.url,
+        ),
+      );
     }
   }
 
@@ -178,25 +214,36 @@ export async function middleware(request: NextRequest) {
   // mapped to the "/admin/permissions" page permission here.
   let matchedPagePath: string | null = null;
   if (pathname.startsWith("/api/leads")) matchedPagePath = "/leads/crm";
-  else if (pathname.startsWith("/api/deals")) matchedPagePath = "/sales/pipeline";
-  else if (pathname.startsWith("/api/offers")) matchedPagePath = "/offer/creation";
-  else if (pathname.startsWith("/api/documents")) matchedPagePath = "/documents/proposals";
-  else if (pathname.startsWith("/api/settings/api-keys")) matchedPagePath = "/settings/api-keys";
-  else if (pathname.startsWith("/api/audit-logs")) matchedPagePath = "/admin/audit-logs";
-  else if (pathname.startsWith("/api/users") && userRole !== "USER") matchedPagePath = "/admin/user-management";
+  else if (pathname.startsWith("/api/deals"))
+    matchedPagePath = "/sales/pipeline";
+  else if (pathname.startsWith("/api/offers"))
+    matchedPagePath = "/offer/creation";
+  else if (pathname.startsWith("/api/documents"))
+    matchedPagePath = "/documents/proposals";
+  else if (pathname.startsWith("/api/settings/api-keys"))
+    matchedPagePath = "/settings/api-keys";
+  else if (pathname.startsWith("/api/audit-logs"))
+    matchedPagePath = "/admin/audit-logs";
+  else if (pathname.startsWith("/api/users") && userRole !== "USER")
+    matchedPagePath = "/admin/user-management";
 
   if (matchedPagePath) {
     const isAllowed = permissions[matchedPagePath];
     if (isAllowed === false) {
       return NextResponse.json(
-        { error: `Forbidden: Access to ${matchedPagePath} is disabled for your role.` },
-        { status: 403 }
+        {
+          error: `Forbidden: Access to ${matchedPagePath} is disabled for your role.`,
+        },
+        { status: 403 },
       );
     }
   }
 
   const response = NextResponse.next();
-  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  response.headers.set(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate",
+  );
   response.headers.set("Pragma", "no-cache");
   response.headers.set("Expires", "0");
   return response;

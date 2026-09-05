@@ -213,83 +213,118 @@ const planFeatures: Record<string, string[]> = {
 async function main() {
   console.log("Seeding subscription plans and features...");
 
+  // FEATURES
   for (const [code, name, featureType, module] of features) {
-    await prisma.feature.upsert({
-      where: { code },
+    const now = new Date();
+
+    await prisma.features.upsert({
+      where: {
+        code,
+      },
+
       update: {
         name,
-        featureType,
+        feature_type: featureType,
         module,
         status: FeatureStatus.ACTIVE,
-        isVisible: true,
+        is_visible: true,
+        updated_at: now,
       },
+
       create: {
+        id: crypto.randomUUID(),
         code,
         name,
-        featureType,
+        feature_type: featureType,
         module,
         status: FeatureStatus.ACTIVE,
-        isVisible: true,
+        is_visible: true,
+        is_metered: false,
+        is_system: false,
+        created_at: now,
+        updated_at: now,
       },
     });
   }
 
+  // PLANS
   for (const plan of plans) {
-    const createdPlan = await prisma.plan.upsert({
-      where: { code: plan.code },
+    const now = new Date();
+
+    const createdPlan = await prisma.plans.upsert({
+      where: {
+        code: plan.code,
+      },
+
       update: {
         name: plan.name,
         description: plan.description,
         status: PlanStatus.ACTIVE,
-        displayOrder: plan.displayOrder,
-        isPublic: true,
-        isDefault: plan.code === "BASIC",
-        trialDays: 14,
-        billingInterval: BillingInterval.MONTH,
-        billingIntervalCount: 1,
+        display_order: plan.displayOrder,
+        is_public: true,
+        is_default: plan.code === "BASIC",
+        trial_days: 14,
+        billing_interval: BillingInterval.MONTH,
+        billing_interval_count: 1,
         currency: "INR",
-        basePrice: 0,
+        base_price: 0,
+        updated_at: now,
       },
+
       create: {
+        id: crypto.randomUUID(),
         code: plan.code,
         name: plan.name,
         description: plan.description,
-        planType: PlanType.STANDARD,
+        plan_type: PlanType.STANDARD,
         status: PlanStatus.ACTIVE,
-        displayOrder: plan.displayOrder,
-        isPublic: true,
-        isDefault: plan.code === "BASIC",
-        trialDays: 14,
-        billingInterval: BillingInterval.MONTH,
-        billingIntervalCount: 1,
+        display_order: plan.displayOrder,
+        is_public: true,
+        is_default: plan.code === "BASIC",
+        trial_days: 14,
+        billing_interval: BillingInterval.MONTH,
+        billing_interval_count: 1,
         currency: "INR",
-        basePrice: 0,
+        base_price: 0,
+        created_at: now,
+        updated_at: now,
       },
     });
 
+    // PLAN FEATURES
     for (const featureCode of planFeatures[plan.code]) {
-      const feature = await prisma.feature.findUnique({
-        where: { code: featureCode },
+      const feature = await prisma.features.findUnique({
+        where: {
+          code: featureCode,
+        },
       });
 
       if (!feature) {
         throw new Error(`Feature not found: ${featureCode}`);
       }
 
-      await prisma.planFeature.upsert({
+      const nowForPlanFeature = new Date();
+
+      await prisma.plan_features.upsert({
         where: {
-          planId_featureId: {
-            planId: createdPlan.id,
-            featureId: feature.id,
+          plan_id_feature_id: {
+            plan_id: createdPlan.id,
+            feature_id: feature.id,
           },
         },
+
         update: {
           enabled: true,
+          updated_at: nowForPlanFeature,
         },
+
         create: {
-          planId: createdPlan.id,
-          featureId: feature.id,
+          id: crypto.randomUUID(),
+          plan_id: createdPlan.id,
+          feature_id: feature.id,
           enabled: true,
+          created_at: nowForPlanFeature,
+          updated_at: nowForPlanFeature,
         },
       });
     }
