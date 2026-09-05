@@ -121,7 +121,7 @@ export async function POST(request: Request) {
       where: { id: user.id },
       data: {
         passwordHash,
-        plainPassword: null, // Ensure plainPassword is empty/null
+
         status: "ACTIVE",
         isActive: true,
       },

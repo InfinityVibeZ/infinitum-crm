@@ -1,6 +1,3 @@
-// NEXUS Sales CRM — Prisma Schema
-// 9 tables, 12 enums
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,7 +8,9 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ─── Enums ───────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────
 
 enum Role {
   SUPER_ADMIN
@@ -107,7 +106,180 @@ enum DocumentType {
   OTHER
 }
 
-// ─── Models ──────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// SUBSCRIPTION / ENTITLEMENT ENUMS
+// ─────────────────────────────────────────────────────────────
+
+enum PlanType {
+  STANDARD
+  ENTERPRISE
+  CUSTOM
+  INTERNAL
+  LEGACY
+}
+
+enum PlanStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum BillingInterval {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum FeatureType {
+  CAPABILITY
+  LIMIT
+  QUOTA
+  MODULE
+  SECURITY
+}
+
+enum FeatureStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum LimitType {
+  COUNT
+  STORAGE
+  REQUESTS
+  CURRENCY
+  BOOLEAN
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  GRACE_PERIOD
+  CANCELED
+  EXPIRED
+  SUSPENDED
+}
+
+enum SubscriptionItemType {
+  PLAN
+  ADDON
+  SEAT
+  METERED
+  ONE_TIME
+}
+
+enum BillingProvider {
+  STRIPE
+  RAZORPAY
+  MANUAL
+  OTHER
+}
+
+enum BillingCustomerStatus {
+  ACTIVE
+  INACTIVE
+  DELETED
+}
+
+enum BillingSubscriptionStatus {
+  INCOMPLETE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  PAUSED
+  EXPIRED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentMethodType {
+  CARD
+  BANK_TRANSFER
+  UPI
+  OTHER
+}
+
+enum PaymentMethodStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum SubscriptionEventType {
+  SUBSCRIPTION_CREATED
+  TRIAL_STARTED
+  TRIAL_ENDED
+  PLAN_CHANGED
+  UPGRADED
+  DOWNGRADED
+  RENEWED
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  PAST_DUE
+  GRACE_PERIOD_STARTED
+  CANCELED
+  EXPIRED
+  SUSPENDED
+  REACTIVATED
+  ENTITLEMENT_CHANGED
+  ITEM_ADDED
+  ITEM_REMOVED
+}
+
+enum SubscriptionActorType {
+  USER
+  SYSTEM
+  BILLING_PROVIDER
+  ADMIN
+}
+
+enum SubscriptionEventSource {
+  ADMIN
+  CUSTOMER
+  SYSTEM
+  WEBHOOK
+  MIGRATION
+}
+
+enum UsageEventType {
+  CONSUMPTION
+  REVERSAL
+  ADJUSTMENT
+  RESET
+}
+
+enum BillingWebhookStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+// ─────────────────────────────────────────────────────────────
+// COMPANY / TENANT
+// ─────────────────────────────────────────────────────────────
 
 model Company {
   id        String     @id @default(uuid()) @db.Uuid
@@ -120,10 +292,31 @@ model Company {
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
-  users     User[]
+  users User[]
+
+  subscription       Subscription?
+  billingCustomers   BillingCustomer[]
+  subscriptionEvents SubscriptionEvent[]
+  invoices           Invoice[]
+  payments           Payment[]
+  usageCounters      UsageCounter[]
+  usageEvents        UsageEvent[]
+
+  leads             Lead[]
+  deals             Deal[]
+  activities        Activity[]
+  leadStatusHistory LeadStatusHistory[]
+  leadPayments      LeadPayment[]
+  followUps         FollowUp[]
+  finances          Finance[]
+  documents         Document[]
 
   @@map("companies")
 }
+
+// ─────────────────────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────────────────────
 
 model User {
   id            String      @id @default(uuid()) @db.Uuid
@@ -147,60 +340,74 @@ model User {
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
 
-  // Relations
-  companyRef    Company?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  leads         Lead[]
-  deals         Deal[]
-  activities    Activity[]
-  documents     Document[]
-  statusHistories LeadStatusHistory[]
+  companyRef Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  leads            Lead[]
+  deals            Deal[]
+  activities       Activity[]
+  documents        Document[]
+  statusHistories  LeadStatusHistory[]
   invitationTokens InvitationToken[]
 
+  @@index([companyId])
+  @@index([companyId, status])
   @@map("users")
 }
 
+// ─────────────────────────────────────────────────────────────
+// CRM
+// ─────────────────────────────────────────────────────────────
+
 model Lead {
-  id              String     @id @default(uuid()) @db.Uuid
-  firstName       String     @map("first_name")
-  lastName        String     @map("last_name")
-  email           String?    @unique
-  phone           String?
-  company         String?
-  jobTitle        String?    @map("job_title")
-  linkedinUrl     String?    @map("linkedin_url")
-  companyWebsite  String?    @map("company_website")
-  category        String?
-  location        String?
-  interestedProduct String?  @map("interested_product")
-  status          LeadStatus @default(NEW)
-  leadSource      LeadSource? @map("lead_source")
-  leadType        String?    @map("lead_type")
-  priority        Priority   @default(MEDIUM)
-  score           Int        @default(0) @db.SmallInt
-  engagementScore Int        @default(0) @map("engagement_score") @db.SmallInt
-  probability     Int        @default(0) @db.SmallInt
-  leadCreatedDate DateTime?   @map("lead_created_date")
-  expectedCloseDate DateTime? @map("expected_close_date")
-  nextFollowUpDate  DateTime? @map("next_follow_up_date")
-  revenueGenerated Decimal?  @default(0) @map("revenue_generated") @db.Decimal(12, 2)
-  cashCollected   Decimal?   @default(0) @map("cash_collected") @db.Decimal(12, 2)
-  milestones      Json?      @default("[]")
-  notes           String?    @db.Text
-  lastActivity    DateTime?  @map("last_activity")
-  isDeleted       Boolean    @default(false) @map("is_deleted")
-  deletedAt       DateTime?  @map("deleted_at")
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
+  id                String      @id @default(uuid()) @db.Uuid
+  firstName         String      @map("first_name")
+  lastName          String      @map("last_name")
+  email             String?
+  phone             String?
+  company           String?
+  jobTitle          String?     @map("job_title")
+  linkedinUrl       String?     @map("linkedin_url")
+  companyWebsite    String?     @map("company_website")
+  category          String?
+  location          String?
+  interestedProduct String?     @map("interested_product")
+  status            LeadStatus  @default(NEW)
+  leadSource        LeadSource? @map("lead_source")
+  leadType          String?     @map("lead_type")
+  priority          Priority    @default(MEDIUM)
+  score             Int         @default(0) @db.SmallInt
+  engagementScore   Int         @default(0) @map("engagement_score") @db.SmallInt
+  probability       Int         @default(0) @db.SmallInt
+  leadCreatedDate   DateTime?   @map("lead_created_date")
+  expectedCloseDate DateTime?   @map("expected_close_date")
+  nextFollowUpDate  DateTime?   @map("next_follow_up_date")
+  revenueGenerated  Decimal?    @default(0) @map("revenue_generated") @db.Decimal(12, 2)
+  cashCollected     Decimal?    @default(0) @map("cash_collected") @db.Decimal(12, 2)
+  milestones        Json?       @default("[]")
+  notes             String?     @db.Text
+  lastActivity      DateTime?   @map("last_activity")
+  isDeleted         Boolean     @default(false) @map("is_deleted")
+  deletedAt         DateTime?   @map("deleted_at")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
 
-  // Relations
-  userId          String     @map("user_id") @db.Uuid
-  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deals           Deal[]
-  activities      Activity[]
-  followUps       FollowUp[]
-  payments        LeadPayment[]
-  statusHistory   LeadStatusHistory[]
+  companyId  String  @map("company_id") @db.Uuid
+  companyRef Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  deals         Deal[]
+  activities    Activity[]
+  followUps     FollowUp[]
+  payments      LeadPayment[]
+  statusHistory LeadStatusHistory[]
+
+  @@unique([companyId, email])
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, userId])
+  @@index([companyId, createdAt])
   @@map("leads")
 }
 
@@ -220,15 +427,23 @@ model Deal {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  // Relations
-  leadId            String?   @map("lead_id") @db.Uuid
-  lead              Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  userId            String    @map("user_id") @db.Uuid
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activities        Activity[]
-  finances          Finance[]
-  documents         Document[]
+  companyId  String  @map("company_id") @db.Uuid
+  companyRef Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
+  leadId String? @map("lead_id") @db.Uuid
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  activities Activity[]
+  finances   Finance[]
+  documents  Document[]
+
+  @@index([companyId])
+  @@index([companyId, stage])
+  @@index([companyId, userId])
+  @@index([companyId, createdAt])
   @@map("deals")
 }
 
@@ -242,42 +457,56 @@ model Activity {
   nextFollowUpTime String?      @map("next_followup_time")
   nextFollowUpType String?      @map("next_followup_type")
   reminder         String?
-  duration         Int?         @db.SmallInt // minutes
+  duration         Int?         @db.SmallInt
   callRecordingUrl String?      @map("call_recording_url")
   callTranscript   String?      @map("call_transcript") @db.Text
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
 
-  // Relations
-  leadId           String?      @map("lead_id") @db.Uuid
-  lead             Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  dealId           String?      @map("deal_id") @db.Uuid
-  deal             Deal?        @relation(fields: [dealId], references: [id], onDelete: SetNull)
-  userId           String       @map("user_id") @db.Uuid
-  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  statusHistories  LeadStatusHistory[]
+  companyId  String  @map("company_id") @db.Uuid
+  companyRef Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
+  leadId String? @map("lead_id") @db.Uuid
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  dealId String? @map("deal_id") @db.Uuid
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  statusHistories LeadStatusHistory[]
+
+  @@index([companyId])
+  @@index([companyId, userId])
+  @@index([companyId, activityDate])
   @@map("activities")
 }
 
 model LeadStatusHistory {
-  id          String      @id @default(uuid()) @db.Uuid
-  fromStatus  LeadStatus? @map("from_status")
-  toStatus    LeadStatus  @map("to_status")
-  reason      String?     @db.Text
-  lostReason  String?     @map("lost_reason")
-  changedAt   DateTime    @default(now()) @map("changed_at")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  id         String      @id @default(uuid()) @db.Uuid
+  fromStatus LeadStatus? @map("from_status")
+  toStatus   LeadStatus  @map("to_status")
+  reason     String?     @db.Text
+  lostReason String?     @map("lost_reason")
+  changedAt  DateTime    @default(now()) @map("changed_at")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
 
-  // Relations
-  leadId      String      @map("lead_id") @db.Uuid
-  lead        Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  userId      String?     @map("user_id") @db.Uuid
-  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
-  activityId  String?     @map("activity_id") @db.Uuid
-  activity    Activity?   @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  companyId  String  @map("company_id") @db.Uuid
+  companyRef Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
+  leadId String @map("lead_id") @db.Uuid
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  userId String? @map("user_id") @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  activityId String?   @map("activity_id") @db.Uuid
+  activity   Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([leadId, createdAt])
   @@map("lead_status_histories")
 }
 
@@ -294,46 +523,58 @@ model LeadPayment {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  // Relations
-  leadId        String    @map("lead_id") @db.Uuid
-  lead          Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  companyId  String  @map("company_id") @db.Uuid
+  companyRef Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
+  leadId String @map("lead_id") @db.Uuid
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, paymentDate])
+  @@index([leadId])
   @@map("lead_payments")
 }
 
 model FollowUp {
-  id                  String        @id @default(uuid()) @db.Uuid
-  number              Int           @db.SmallInt // 1-7
-  dueDate             DateTime      @map("due_date")
-  completed           Boolean       @default(false)
-  completedAt         DateTime?     @map("completed_at")
-  followUpType        FollowUpType  @map("followup_type")
-  personalizedMessage String?       @map("personalized_message") @db.Text
+  id                  String         @id @default(uuid()) @db.Uuid
+  number              Int            @db.SmallInt
+  dueDate             DateTime       @map("due_date")
+  completed           Boolean        @default(false)
+  completedAt         DateTime?      @map("completed_at")
+  followUpType        FollowUpType   @map("followup_type")
+  personalizedMessage String?        @map("personalized_message") @db.Text
   status              FollowUpStatus @default(PENDING)
-  notes               String?       @db.Text
-  createdAt           DateTime      @default(now()) @map("created_at")
-  updatedAt           DateTime      @updatedAt @map("updated_at")
+  notes               String?        @db.Text
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
 
-  // Relations
-  leadId              String        @map("lead_id") @db.Uuid
-  lead                Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  companyId  String  @map("company_id") @db.Uuid
+  companyRef Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
+  leadId String @map("lead_id") @db.Uuid
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, dueDate])
+  @@index([leadId])
   @@map("followups")
 }
 
 model Finance {
-  id            String      @id @default(uuid()) @db.Uuid
-  type          FinanceType
-  amount        Decimal     @db.Decimal(12, 2)
-  description   String?     @db.Text
-  recordedDate  DateTime    @map("recorded_date")
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  id           String      @id @default(uuid()) @db.Uuid
+  type         FinanceType
+  amount       Decimal     @db.Decimal(12, 2)
+  description  String?     @db.Text
+  recordedDate DateTime    @map("recorded_date")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
 
-  // Relations
-  dealId        String      @map("deal_id") @db.Uuid
-  deal          Deal        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  companyId  String  @map("company_id") @db.Uuid
+  companyRef Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
+  dealId String @map("deal_id") @db.Uuid
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, recordedDate])
+  @@index([dealId])
   @@map("finances")
 }
 
@@ -356,21 +597,26 @@ model Offer {
 }
 
 model Document {
-  id          String       @id @default(uuid()) @db.Uuid
-  name        String
-  type        DocumentType @default(OTHER)
-  filePath    String       @map("file_path")
-  fileSize    Int?         @map("file_size")
-  fileType    String?      @map("file_type")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String
+  type      DocumentType @default(OTHER)
+  filePath  String       @map("file_path")
+  fileSize  Int?         @map("file_size")
+  fileType  String?      @map("file_type")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
 
-  // Relations
-  dealId      String       @map("deal_id") @db.Uuid
-  deal        Deal         @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  uploadedBy  String       @map("uploaded_by") @db.Uuid
-  uploader    User         @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  companyId  String  @map("company_id") @db.Uuid
+  companyRef Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
+  dealId String @map("deal_id") @db.Uuid
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  uploadedBy String @map("uploaded_by") @db.Uuid
+  uploader   User   @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([dealId])
   @@map("documents")
 }
 
@@ -388,18 +634,18 @@ model EodReport {
 }
 
 model AuditLog {
-  id          String   @id @default(uuid()) @db.Uuid
-  action      String   // e.g. "USER_CREATED", "PASSWORD_RESET", "STATUS_TOGGLED", "USER_DELETED", "LOGIN"
-  category    String   @default("User Management") // e.g. "User Management", "Admin Management", "Auth", "System"
-  severity    String   @default("INFO") // "INFO", "SUCCESS", "WARNING", "DANGER"
-  actorName   String   @map("actor_name")
-  actorEmail  String   @map("actor_email")
-  actorRole   String?  @map("actor_role")
-  targetName  String?  @map("target_name")
-  summary     String   @db.Text
-  details     Json?
-  ipAddress   String?  @map("ip_address")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String   @id @default(uuid()) @db.Uuid
+  action     String
+  category   String   @default("User Management")
+  severity   String   @default("INFO")
+  actorName  String   @map("actor_name")
+  actorEmail String   @map("actor_email")
+  actorRole  String?  @map("actor_role")
+  targetName String?  @map("target_name")
+  summary    String   @db.Text
+  details    Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("audit_logs")
 }
@@ -411,6 +657,7 @@ model PasswordResetToken {
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([expiresAt])
   @@map("password_reset_tokens")
 }
 
@@ -418,7 +665,7 @@ model SystemConfig {
   key       String   @id
   value     String
   label     String?
-  category  String   @default("API_KEY") // e.g. "API_KEY", "SYSTEM", "INTEGRATION"
+  category  String   @default("API_KEY")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_configs")
@@ -431,22 +678,475 @@ model InvitationToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyId String?   @map("company_id") @db.Uuid
   role      Role      @default(USER)
-  purpose   String    @default("ACCOUNT_SETUP") // "ACCOUNT_SETUP" | "PASSWORD_RESET"
-  status    String    @default("PENDING") // "PENDING" | "USED" | "EXPIRED" | "REVOKED"
+  purpose   String    @default("ACCOUNT_SETUP")
+  status    String    @default("PENDING")
   expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
   createdBy String?   @map("created_by")
   createdAt DateTime  @default(now()) @map("created_at")
 
+  @@index([companyId])
+  @@index([expiresAt])
   @@map("invitation_tokens")
 }
 
-/// Tracks the last time each user was seen active, used to enforce a
-/// concurrent-user cap (see src/lib/session-limit.ts). One row per user
-/// (upserted), not one row per login.
 model ActiveSession {
   userId     String   @id @map("user_id") @db.Uuid
   lastSeenAt DateTime @default(now()) @map("last_seen_at")
 
   @@map("active_sessions")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SUBSCRIPTION
+// ─────────────────────────────────────────────────────────────
+
+model Plan {
+  id                   String          @id @default(uuid()) @db.Uuid
+  code                 String          @unique
+  name                 String
+  description          String?         @db.Text
+  planType             PlanType        @default(STANDARD) @map("plan_type")
+  status               PlanStatus      @default(DRAFT)
+  displayOrder         Int             @default(0) @map("display_order")
+  isPublic             Boolean         @default(true) @map("is_public")
+  isDefault            Boolean         @default(false) @map("is_default")
+  trialDays            Int             @default(0) @map("trial_days")
+  billingInterval      BillingInterval @default(MONTH) @map("billing_interval")
+  billingIntervalCount Int             @default(1) @map("billing_interval_count")
+  currency             String          @default("INR") @db.Char(3)
+  basePrice            Decimal         @default(0) @map("base_price") @db.Decimal(18, 4)
+  metadata             Json?
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+  archivedAt           DateTime?       @map("archived_at")
+
+  features               PlanFeature[]
+  subscriptions          Subscription[]
+  scheduledSubscriptions Subscription[] @relation("ScheduledPlan")
+  billingPrices          BillingPrice[]
+
+  @@index([status])
+  @@index([isPublic])
+  @@map("plans")
+}
+
+model Feature {
+  id                  String        @id @default(uuid()) @db.Uuid
+  code                String        @unique
+  name                String
+  description         String?       @db.Text
+  featureType         FeatureType   @default(CAPABILITY) @map("feature_type")
+  status              FeatureStatus @default(ACTIVE)
+  module              String?
+  resource            String?
+  action              String?
+  isMetered           Boolean       @default(false) @map("is_metered")
+  isSystem            Boolean       @default(false) @map("is_system")
+  isVisible           Boolean       @default(true) @map("is_visible")
+  configurationSchema Json?         @map("configuration_schema")
+  metadata            Json?
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+  archivedAt          DateTime?     @map("archived_at")
+
+  plans                PlanFeature[]
+  subscriptionItems    SubscriptionItem[]
+  entitlementOverrides SubscriptionEntitlementOverride[]
+  usageCounters        UsageCounter[]
+  usageEvents          UsageEvent[]
+  billingPrices        BillingPrice[]
+
+  @@index([status])
+  @@index([module])
+  @@map("features")
+}
+
+model PlanFeature {
+  id            String     @id @default(uuid()) @db.Uuid
+  planId        String     @map("plan_id") @db.Uuid
+  featureId     String     @map("feature_id") @db.Uuid
+  enabled       Boolean    @default(true)
+  limitValue    BigInt?    @map("limit_value")
+  limitType     LimitType? @map("limit_type")
+  configuration Json?
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, featureId])
+  @@index([featureId])
+  @@map("plan_features")
+}
+
+model Subscription {
+  id                     String             @id @default(uuid()) @db.Uuid
+  companyId              String             @unique @map("company_id") @db.Uuid
+  planId                 String             @map("plan_id") @db.Uuid
+  status                 SubscriptionStatus @default(TRIALING)
+  startedAt              DateTime           @default(now()) @map("started_at")
+  trialStartedAt         DateTime?          @map("trial_started_at")
+  trialEndsAt            DateTime?          @map("trial_ends_at")
+  currentPeriodStart     DateTime           @map("current_period_start")
+  currentPeriodEnd       DateTime           @map("current_period_end")
+  cancelAtPeriodEnd      Boolean            @default(false) @map("cancel_at_period_end")
+  canceledAt             DateTime?          @map("canceled_at")
+  endedAt                DateTime?          @map("ended_at")
+  scheduledPlanId        String?            @map("scheduled_plan_id") @db.Uuid
+  scheduledChangeAt      DateTime?          @map("scheduled_change_at")
+  currency               String             @default("INR") @db.Char(3)
+  amount                 Decimal            @default(0) @db.Decimal(18, 4)
+  quantity               Int                @default(1)
+  provider               BillingProvider?
+  providerSubscriptionId String?            @map("provider_subscription_id")
+  version                BigInt             @default(1)
+  metadata               Json?
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+
+  company       Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  plan          Plan    @relation(fields: [planId], references: [id], onDelete: Restrict)
+  scheduledPlan Plan?   @relation("ScheduledPlan", fields: [scheduledPlanId], references: [id], onDelete: Restrict)
+
+  items                SubscriptionItem[]
+  events               SubscriptionEvent[]
+  entitlementOverrides SubscriptionEntitlementOverride[]
+  billingSubscription  BillingSubscription?
+  usageCounters        UsageCounter[]
+  usageEvents          UsageEvent[]
+  invoices             Invoice[]
+  payments             Payment[]
+
+  @@unique([provider, providerSubscriptionId])
+  @@index([companyId, status])
+  @@index([planId])
+  @@index([status, currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+model SubscriptionItem {
+  id             String               @id @default(uuid()) @db.Uuid
+  subscriptionId String               @map("subscription_id") @db.Uuid
+  featureId      String?              @map("feature_id") @db.Uuid
+  billingPriceId String?              @map("billing_price_id") @db.Uuid
+  itemType       SubscriptionItemType @map("item_type")
+  quantity       Int                  @default(1)
+  unitAmount     Decimal              @default(0) @map("unit_amount") @db.Decimal(18, 4)
+  currency       String               @default("INR") @db.Char(3)
+  startedAt      DateTime             @default(now()) @map("started_at")
+  endedAt        DateTime?            @map("ended_at")
+  metadata       Json?
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  subscription Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  feature      Feature?      @relation(fields: [featureId], references: [id], onDelete: Restrict)
+  billingPrice BillingPrice? @relation(fields: [billingPriceId], references: [id], onDelete: Restrict)
+
+  @@index([subscriptionId])
+  @@index([featureId])
+  @@map("subscription_items")
+}
+
+model SubscriptionEvent {
+  id              String                  @id @default(uuid()) @db.Uuid
+  subscriptionId  String                  @map("subscription_id") @db.Uuid
+  companyId       String                  @map("company_id") @db.Uuid
+  eventType       SubscriptionEventType   @map("event_type")
+  previousPlanId  String?                 @map("previous_plan_id") @db.Uuid
+  newPlanId       String?                 @map("new_plan_id") @db.Uuid
+  previousStatus  SubscriptionStatus?     @map("previous_status")
+  newStatus       SubscriptionStatus?     @map("new_status")
+  effectiveAt     DateTime                @default(now()) @map("effective_at")
+  actorType       SubscriptionActorType   @map("actor_type")
+  actorId         String?                 @map("actor_id") @db.Uuid
+  source          SubscriptionEventSource
+  providerEventId String?                 @map("provider_event_id")
+  requestId       String?                 @map("request_id")
+  reason          String?                 @db.Text
+  payload         Json?
+  createdAt       DateTime                @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([source, providerEventId])
+  @@index([subscriptionId, createdAt])
+  @@index([companyId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("subscription_events")
+}
+
+model SubscriptionEntitlementOverride {
+  id             String    @id @default(uuid()) @db.Uuid
+  subscriptionId String    @map("subscription_id") @db.Uuid
+  featureId      String    @map("feature_id") @db.Uuid
+  enabled        Boolean?
+  limitValue     BigInt?   @map("limit_value")
+  configuration  Json?
+  reason         String    @db.Text
+  startsAt       DateTime  @default(now()) @map("starts_at")
+  endsAt         DateTime? @map("ends_at")
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  feature      Feature      @relation(fields: [featureId], references: [id], onDelete: Restrict)
+
+  @@unique([subscriptionId, featureId])
+  @@index([featureId])
+  @@index([endsAt])
+  @@map("subscription_entitlement_overrides")
+}
+
+// ─────────────────────────────────────────────────────────────
+// BILLING
+// ─────────────────────────────────────────────────────────────
+
+model BillingCustomer {
+  id                 String                @id @default(uuid()) @db.Uuid
+  companyId          String                @map("company_id") @db.Uuid
+  provider           BillingProvider
+  providerCustomerId String                @map("provider_customer_id")
+  email              String?
+  currency           String?               @db.Char(3)
+  status             BillingCustomerStatus @default(ACTIVE)
+  metadata           Json?
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  billingSubscriptions BillingSubscription[]
+  paymentMethods       PaymentMethod[]
+  invoices             Invoice[]
+
+  @@unique([provider, providerCustomerId])
+  @@unique([companyId, provider])
+  @@index([companyId])
+  @@map("billing_customers")
+}
+
+model BillingPrice {
+  id                   String          @id @default(uuid()) @db.Uuid
+  planId               String?         @map("plan_id") @db.Uuid
+  featureId            String?         @map("feature_id") @db.Uuid
+  provider             BillingProvider
+  providerProductId    String?         @map("provider_product_id")
+  providerPriceId      String?         @map("provider_price_id")
+  currency             String          @db.Char(3)
+  amount               Decimal         @db.Decimal(18, 4)
+  billingInterval      BillingInterval @map("billing_interval")
+  billingIntervalCount Int             @default(1) @map("billing_interval_count")
+  pricingModel         String          @default("FLAT") @map("pricing_model")
+  isActive             Boolean         @default(true) @map("is_active")
+  effectiveFrom        DateTime        @default(now()) @map("effective_from")
+  effectiveUntil       DateTime?       @map("effective_until")
+  metadata             Json?
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+
+  plan                Plan?                 @relation(fields: [planId], references: [id], onDelete: Restrict)
+  feature             Feature?              @relation(fields: [featureId], references: [id], onDelete: Restrict)
+  subscriptionItems   SubscriptionItem[]
+  BillingSubscription BillingSubscription[]
+
+  @@unique([provider, providerPriceId])
+  @@index([planId])
+  @@index([featureId])
+  @@index([provider, isActive])
+  @@map("billing_prices")
+}
+
+model BillingSubscription {
+  id                         String                    @id @default(uuid()) @db.Uuid
+  subscriptionId             String                    @unique @map("subscription_id") @db.Uuid
+  billingCustomerId          String                    @map("billing_customer_id") @db.Uuid
+  billingPriceId             String                    @map("billing_price_id") @db.Uuid
+  provider                   BillingProvider
+  providerSubscriptionId     String                    @map("provider_subscription_id")
+  status                     BillingSubscriptionStatus
+  providerCreatedAt          DateTime?                 @map("provider_created_at")
+  providerCurrentPeriodStart DateTime?                 @map("provider_current_period_start")
+  providerCurrentPeriodEnd   DateTime?                 @map("provider_current_period_end")
+  cancelAtPeriodEnd          Boolean                   @default(false) @map("cancel_at_period_end")
+  metadata                   Json?
+  createdAt                  DateTime                  @default(now()) @map("created_at")
+  updatedAt                  DateTime                  @updatedAt @map("updated_at")
+
+  subscription    Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  billingCustomer BillingCustomer @relation(fields: [billingCustomerId], references: [id], onDelete: Restrict)
+  billingPrice    BillingPrice    @relation(fields: [billingPriceId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerSubscriptionId])
+  @@index([billingCustomerId])
+  @@index([billingPriceId])
+  @@map("billing_subscriptions")
+}
+
+model Invoice {
+  id                String          @id @default(uuid()) @db.Uuid
+  companyId         String          @map("company_id") @db.Uuid
+  subscriptionId    String?         @map("subscription_id") @db.Uuid
+  billingCustomerId String          @map("billing_customer_id") @db.Uuid
+  provider          BillingProvider
+  providerInvoiceId String          @map("provider_invoice_id")
+  invoiceNumber     String?         @map("invoice_number")
+  status            InvoiceStatus
+  currency          String          @db.Char(3)
+  subtotal          Decimal         @db.Decimal(18, 4)
+  discount          Decimal         @default(0) @db.Decimal(18, 4)
+  tax               Decimal         @default(0) @db.Decimal(18, 4)
+  total             Decimal         @db.Decimal(18, 4)
+  amountPaid        Decimal         @default(0) @map("amount_paid") @db.Decimal(18, 4)
+  amountDue         Decimal         @default(0) @map("amount_due") @db.Decimal(18, 4)
+  periodStart       DateTime?       @map("period_start")
+  periodEnd         DateTime?       @map("period_end")
+  dueAt             DateTime?       @map("due_at")
+  paidAt            DateTime?       @map("paid_at")
+  metadata          Json?
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  subscription    Subscription?   @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  billingCustomer BillingCustomer @relation(fields: [billingCustomerId], references: [id], onDelete: Restrict)
+  payments        Payment[]
+
+  @@unique([provider, providerInvoiceId])
+  @@index([companyId, createdAt])
+  @@index([subscriptionId])
+  @@index([status])
+  @@map("invoices")
+}
+
+model Payment {
+  id                String          @id @default(uuid()) @db.Uuid
+  companyId         String          @map("company_id") @db.Uuid
+  invoiceId         String?         @map("invoice_id") @db.Uuid
+  subscriptionId    String?         @map("subscription_id") @db.Uuid
+  provider          BillingProvider
+  providerPaymentId String          @map("provider_payment_id")
+  status            PaymentStatus
+  amount            Decimal         @db.Decimal(18, 4)
+  currency          String          @db.Char(3)
+  paymentMethodId   String?         @map("payment_method_id") @db.Uuid
+  failureCode       String?         @map("failure_code")
+  failureReason     String?         @map("failure_reason") @db.Text
+  processedAt       DateTime?       @map("processed_at")
+  metadata          Json?
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  invoice       Invoice?       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  subscription  Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerPaymentId])
+  @@index([companyId, createdAt])
+  @@index([invoiceId])
+  @@index([subscriptionId])
+  @@map("payments")
+}
+
+model PaymentMethod {
+  id                      String              @id @default(uuid()) @db.Uuid
+  billingCustomerId       String              @map("billing_customer_id") @db.Uuid
+  provider                BillingProvider
+  providerPaymentMethodId String              @map("provider_payment_method_id")
+  methodType              PaymentMethodType   @map("method_type")
+  brand                   String?
+  lastFour                String?             @map("last_four")
+  expiryMonth             Int?                @map("expiry_month")
+  expiryYear              Int?                @map("expiry_year")
+  isDefault               Boolean             @default(false) @map("is_default")
+  status                  PaymentMethodStatus @default(ACTIVE)
+  metadata                Json?
+  createdAt               DateTime            @default(now()) @map("created_at")
+  updatedAt               DateTime            @updatedAt @map("updated_at")
+
+  billingCustomer BillingCustomer @relation(fields: [billingCustomerId], references: [id], onDelete: Cascade)
+  payments        Payment[]
+
+  @@unique([provider, providerPaymentMethodId])
+  @@index([billingCustomerId])
+  @@map("payment_methods")
+}
+
+model BillingWebhookEvent {
+  id                String               @id @default(uuid()) @db.Uuid
+  provider          BillingProvider
+  providerEventId   String               @map("provider_event_id")
+  eventType         String               @map("event_type")
+  status            BillingWebhookStatus @default(RECEIVED)
+  receivedAt        DateTime             @default(now()) @map("received_at")
+  processedAt       DateTime?            @map("processed_at")
+  attemptCount      Int                  @default(0) @map("attempt_count")
+  signatureVerified Boolean              @default(false) @map("signature_verified")
+  payloadHash       String               @map("payload_hash")
+  payload           Json
+  errorCode         String?              @map("error_code")
+  errorMessage      String?              @map("error_message") @db.Text
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  @@unique([provider, providerEventId])
+  @@index([status, createdAt])
+  @@index([eventType, createdAt])
+  @@map("billing_webhook_events")
+}
+
+// ─────────────────────────────────────────────────────────────
+// USAGE
+// ─────────────────────────────────────────────────────────────
+
+model UsageCounter {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @map("company_id") @db.Uuid
+  subscriptionId String   @map("subscription_id") @db.Uuid
+  featureId      String   @map("feature_id") @db.Uuid
+  periodStart    DateTime @map("period_start")
+  periodEnd      DateTime @map("period_end")
+  usageValue     BigInt   @default(0) @map("usage_value")
+  limitValue     BigInt?  @map("limit_value")
+  version        BigInt   @default(1)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  feature      Feature      @relation(fields: [featureId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, featureId, periodStart, periodEnd])
+  @@index([subscriptionId])
+  @@index([featureId, periodEnd])
+  @@map("usage_counters")
+}
+
+model UsageEvent {
+  id             String         @id @default(uuid()) @db.Uuid
+  companyId      String         @map("company_id") @db.Uuid
+  subscriptionId String         @map("subscription_id") @db.Uuid
+  featureId      String         @map("feature_id") @db.Uuid
+  userId         String?        @map("user_id") @db.Uuid
+  quantity       BigInt
+  eventType      UsageEventType @map("event_type")
+  idempotencyKey String         @map("idempotency_key")
+  occurredAt     DateTime       @default(now()) @map("occurred_at")
+  requestId      String?        @map("request_id")
+  metadata       Json?
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  feature      Feature      @relation(fields: [featureId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, featureId, occurredAt])
+  @@index([subscriptionId, occurredAt])
+  @@index([userId])
+  @@map("usage_events")
 }
