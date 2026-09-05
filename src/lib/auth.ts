@@ -61,8 +61,8 @@ export async function loginUser(email: string, password: string) {
     throw new Error("This email does not exist.");
   }
 
-  const userCompName = user.company || user.companyRef?.name || user.department || "Infinitum";
-  const targetTeam = user.role === "USER" ? userCompName : "Infinitum";
+  const userCompName = user.company || user.companyRef?.name || user.department || "Infinity Vibez";
+  const targetTeam = user.role === "USER" ? userCompName : "Infinity Vibez";
 
   if (!user.isActive || user.status === "INACTIVE") {
     throw new Error(`You don't have access to this portal or application. Please contact the ${targetTeam} team.`);
@@ -79,7 +79,7 @@ export async function loginUser(email: string, password: string) {
 
     if (user.companyRef) {
       if (!user.companyRef.isActive || user.companyRef.status === "INACTIVE") {
-        throw new Error("You don't have access to this portal or application. Please contact the Infinitum team.");
+        throw new Error("You don't have access to this portal or application. Please contact the Infinity Vibez team.");
       }
     } else if (compId || compName) {
       const company = await prisma.company.findFirst({
@@ -92,7 +92,7 @@ export async function loginUser(email: string, password: string) {
       });
 
       if (company && (!company.isActive || company.status === "INACTIVE")) {
-        throw new Error("You don't have access to this portal or application. Please contact the Infinitum team.");
+        throw new Error("You don't have access to this portal or application. Please contact the Infinity Vibez team.");
       }
     }
   }
@@ -134,7 +134,7 @@ export function extractTokenFromRequest(request: Request): string | null {
   if (authHeader?.startsWith("Bearer ")) {
     return authHeader.substring(7);
   }
-  
+
   // Parse cookies from headers
   const cookieHeader = request.headers.get("cookie");
   if (cookieHeader) {
@@ -164,11 +164,11 @@ export function getTokenPayload(token: string): JWTPayload | null {
 /** RLS Helper: Get Prisma `where` clause for entity tables (Leads, Deals, Documents, etc.) based on tenant logic. */
 export function getTenantWhereClause(payload: JWTPayload | null) {
   if (!payload) return { id: "UNAUTHORIZED" }; // Failsafe
-  
+
   if (payload.role === "SUPER_ADMIN") {
     return {}; // Super Admin sees all
   }
-  
+
   if (payload.role === "ADMIN") {
     // Admin sees their own data, and data of users they created
     return {
@@ -178,7 +178,7 @@ export function getTenantWhereClause(payload: JWTPayload | null) {
       ]
     };
   }
-  
+
   // Regular USER sees only their own data
   return { userId: payload.userId };
 }
@@ -186,11 +186,11 @@ export function getTenantWhereClause(payload: JWTPayload | null) {
 /** RLS Helper (Async): Get Prisma `where` clause for entity tables based on company-wide tenant logic. */
 export async function getTenantWhereClauseAsync(payload: JWTPayload | null) {
   if (!payload) return { id: "UNAUTHORIZED" }; // Failsafe
-  
+
   if (payload.role === "SUPER_ADMIN") {
     return {}; // Super Admin sees all
   }
-  
+
   if (payload.role === "ADMIN") {
     const adminUser = await prisma.user.findUnique({
       where: { id: payload.userId },
@@ -216,7 +216,7 @@ export async function getTenantWhereClauseAsync(payload: JWTPayload | null) {
 
     return { OR: orConditions };
   }
-  
+
   // Regular USER sees only their own data
   return { userId: payload.userId };
 }
@@ -224,11 +224,11 @@ export async function getTenantWhereClauseAsync(payload: JWTPayload | null) {
 /** RLS Helper: Get Prisma `where` clause for the User table itself. */
 export function getUserTenantWhereClause(payload: JWTPayload | null) {
   if (!payload) return { id: "UNAUTHORIZED" }; // Failsafe
-  
+
   if (payload.role === "SUPER_ADMIN") {
     return {}; // Super Admin sees all users
   }
-  
+
   if (payload.role === "ADMIN") {
     // Admin sees themselves, and users they created
     return {
@@ -238,7 +238,7 @@ export function getUserTenantWhereClause(payload: JWTPayload | null) {
       ]
     };
   }
-  
+
   // Regular USER sees only themselves
   return { id: payload.userId };
 }
@@ -246,11 +246,11 @@ export function getUserTenantWhereClause(payload: JWTPayload | null) {
 /** RLS Helper (Async): Get Prisma `where` clause for the User table itself based on company scope. */
 export async function getUserTenantWhereClauseAsync(payload: JWTPayload | null) {
   if (!payload) return { id: "UNAUTHORIZED" }; // Failsafe
-  
+
   if (payload.role === "SUPER_ADMIN") {
     return {}; // Super Admin sees all users
   }
-  
+
   if (payload.role === "ADMIN") {
     const adminUser = await prisma.user.findUnique({
       where: { id: payload.userId },
@@ -276,7 +276,7 @@ export async function getUserTenantWhereClauseAsync(payload: JWTPayload | null) 
 
     return { OR: orConditions };
   }
-  
+
   // Regular USER sees only themselves
   return { id: payload.userId };
 }

@@ -73,12 +73,12 @@ export async function sendAdminInvitationEmail({
 }) {
   const recipient = resolveRecipientEmail(adminEmail);
   const setupUrl = `${baseUrl}/account/setup?token=${encodeURIComponent(rawToken)}`;
-  const fromEmail = process.env.SMTP_FROM || '"Infinitum Team" <builtby.rajum@gmail.com>';
+  const fromEmail = process.env.SMTP_FROM || '"Infinity Vibez Team" <builtby.rajum@gmail.com>';
 
-  const subject = `Set up your Infinitum account – ${companyName}`;
+  const subject = `Set up your Infinity Vibez account – ${companyName}`;
   const textContent = `Hello ${adminName},
 
-The Infinitum Team has invited you to manage ${companyName}.
+The Infinity Vibez Team has invited you to manage ${companyName}.
 
 Company: ${companyName}
 Email: ${adminEmail}
@@ -89,21 +89,21 @@ Set Up Your Account: ${setupUrl}
 
 This secure link expires in 24 hours and can only be used once.
 
-If the link expires or you need assistance, please contact the Infinitum Team.
+If the link expires or you need assistance, please contact the Infinity Vibez Team.
 
 If you weren't expecting this invitation, you can safely ignore this email.
 
 Regards,
-Infinitum Team`;
+Infinity Vibez Team`;
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb;">
       <div style="background-color: #111827; padding: 32px 40px; text-align: center;">
-        <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #10D078; letter-spacing: -0.5px;">Infinitum</h1>
+        <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #10D078; letter-spacing: -0.5px;">Infinity Vibez</h1>
       </div>
       <div style="padding: 40px;">
         <p style="font-size: 16px; color: #111827; font-weight: 600; margin: 0 0 8px 0;">Hello ${adminName},</p>
-        <p style="font-size: 14px; color: #374151; line-height: 1.7; margin: 0 0 28px 0;">The Infinitum Team has invited you to manage <strong>${companyName}</strong>.</p>
+        <p style="font-size: 14px; color: #374151; line-height: 1.7; margin: 0 0 28px 0;">The Infinity Vibez Team has invited you to manage <strong>${companyName}</strong>.</p>
 
         <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 28px;">
           <table style="width: 100%; border-collapse: collapse;">
@@ -129,17 +129,17 @@ Infinitum Team`;
         <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
 
         <p style="font-size: 12px; color: #6b7280; line-height: 1.6; margin: 0 0 8px 0;">This secure link expires in <strong>24 hours</strong> and can only be used once.</p>
-        <p style="font-size: 12px; color: #6b7280; line-height: 1.6; margin: 0 0 8px 0;">If the link expires or you need assistance, please contact the Infinitum Team.</p>
+        <p style="font-size: 12px; color: #6b7280; line-height: 1.6; margin: 0 0 8px 0;">If the link expires or you need assistance, please contact the Infinity Vibez Team.</p>
         <p style="font-size: 12px; color: #9ca3af; line-height: 1.6; margin: 0;">If you weren't expecting this invitation, you can safely ignore this email.</p>
       </div>
       <div style="background-color: #f9fafb; border-top: 1px solid #e5e7eb; padding: 20px 40px; text-align: center;">
-        <p style="font-size: 12px; color: #6b7280; margin: 0;">Regards,<br /><strong style="color: #374151;">Infinitum Team</strong></p>
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">Regards,<br /><strong style="color: #374151;">Infinity Vibez Team</strong></p>
       </div>
     </div>
   `;
 
   console.log(`\n======================================================`);
-  console.log(`[INFINITUM ADMIN INVITATION] FROM: ${fromEmail} -> TO: ${recipient}`);
+  console.log(`[INFINITY VIBEZ ADMIN INVITATION] FROM: ${fromEmail} -> TO: ${recipient}`);
   console.log(`Setup URL: ${setupUrl}`);
   console.log(`======================================================\n`);
 
@@ -179,7 +179,7 @@ export async function sendUserInvitationEmail({
 }) {
   const recipient = resolveRecipientEmail(userEmail);
   const setupUrl = `${baseUrl}/account/setup?token=${encodeURIComponent(rawToken)}`;
-  const fromEmail = process.env.SMTP_FROM || '"Infinitum Team" <builtby.rajum@gmail.com>';
+  const fromEmail = process.env.SMTP_FROM || '"Infinity Vibez Team" <builtby.rajum@gmail.com>';
 
   const subject = `Set up your ${companyName} account`;
   const textContent = `Hello ${userName},
@@ -205,7 +205,7 @@ ${companyName} Team`;
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb;">
       <div style="background-color: #111827; padding: 32px 40px; text-align: center;">
-        <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #10D078; letter-spacing: -0.5px;">Infinitum</h1>
+        <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #10D078; letter-spacing: -0.5px;">Infinity Vibez</h1>
       </div>
       <div style="padding: 40px;">
         <p style="font-size: 16px; color: #111827; font-weight: 600; margin: 0 0 8px 0;">Hello ${userName},</p>
@@ -245,7 +245,7 @@ ${companyName} Team`;
   `;
 
   console.log(`\n======================================================`);
-  console.log(`[INFINITUM USER INVITATION] FROM: ${fromEmail} -> TO: ${recipient}`);
+  console.log(`[INFINITY VIBEZ USER INVITATION] FROM: ${fromEmail} -> TO: ${recipient}`);
   console.log(`Setup URL: ${setupUrl}`);
   console.log(`======================================================\n`);
 
@@ -283,7 +283,7 @@ export async function sendPasswordResetEmail({
 }) {
   const recipient = resolveRecipientEmail(email);
   const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
-  const fromEmail = process.env.SMTP_FROM || '"Infinitum Team" <builtby.rajum@gmail.com>';
+  const fromEmail = process.env.SMTP_FROM || '"Infinity Vibez Team" <builtby.rajum@gmail.com>';
 
   const subject = "Reset your password";
   const textContent = `Hello ${name},
@@ -300,7 +300,7 @@ This secure link expires in 24 hours and can only be used once.
 If you didn't request this password reset, you can safely ignore this email.
 
 Regards,
-Infinitum Team`;
+Infinity Vibez Team`;
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #111827; color: #f3f4f6; border-radius: 12px; border: 1px solid #374151;">
@@ -321,12 +321,12 @@ Infinitum Team`;
       <p style="font-size: 12px; color: #9ca3af; line-height: 1.5; margin-top: 24px;">This secure password reset link expires in <strong>24 hours</strong> and can only be used once.</p>
       <p style="font-size: 12px; color: #6b7280; line-height: 1.5;">If you didn't request this password reset, you can safely ignore this email.</p>
       <hr style="border: 0; border-top: 1px solid #374151; margin: 24px 0;" />
-      <p style="font-size: 12px; color: #6b7280;">Regards,<br /><strong>Infinitum Team</strong></p>
+      <p style="font-size: 12px; color: #6b7280;">Regards,<br /><strong>Infinity Vibez Team</strong></p>
     </div>
   `;
 
   console.log(`\n======================================================`);
-  console.log(`[INFINITUM PASSWORD RESET] FROM: ${fromEmail} -> TO: ${recipient}`);
+  console.log(`[INFINITY VIBEZ PASSWORD RESET] FROM: ${fromEmail} -> TO: ${recipient}`);
   console.log(`Reset URL: ${resetUrl}`);
   console.log(`======================================================\n`);
 

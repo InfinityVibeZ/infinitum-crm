@@ -128,9 +128,9 @@ function AccountSetupPageClient() {
   };
 
   // Determine expired message based on role
-  const companyName = expiredContext?.company && expiredContext.company !== "Infinitum"
+  const companyName = expiredContext?.company && expiredContext.company !== "Infinity Vibez"
     ? `${expiredContext.company} Team`
-    : "Infinitum Team";
+    : "Infinity Vibez Team";
 
   return (
     <div className="min-h-screen bg-[#0A0D14] flex flex-col items-center justify-center p-4">
@@ -143,7 +143,7 @@ function AccountSetupPageClient() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-nexus-primary/10 border border-nexus-primary/30 text-nexus-primary mb-3">
             <IconShieldCheck size={28} />
           </div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Infinitum Account Setup</h1>
+          <h1 className="text-xl font-bold text-white tracking-tight">Infinity Vibez Account Setup</h1>
           <p className="text-xs text-nexus-muted mt-1">Create your secure password to activate your account</p>
         </div>
 
@@ -329,9 +329,8 @@ function AccountSetupPageClient() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter password"
-                  className={`w-full pl-9 pr-3 py-2.5 text-sm bg-nexus-bg border rounded-xl text-nexus-text focus:outline-none focus:border-nexus-primary font-mono ${
-                    confirmPassword && confirmPassword !== password ? "border-red-500/50" : "border-nexus-border"
-                  }`}
+                  className={`w-full pl-9 pr-3 py-2.5 text-sm bg-nexus-bg border rounded-xl text-nexus-text focus:outline-none focus:border-nexus-primary font-mono ${confirmPassword && confirmPassword !== password ? "border-red-500/50" : "border-nexus-border"
+                    }`}
                   required
                 />
               </div>

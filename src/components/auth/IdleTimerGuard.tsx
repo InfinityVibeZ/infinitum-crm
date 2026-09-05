@@ -51,14 +51,14 @@ export function IdleTimerGuard({ children }: { children: React.ReactNode }) {
     window.addEventListener("pageshow", handlePageShow);
     window.addEventListener("focus", onFocus);
 
-    // 3. Periodic check every 5 seconds to catch logout in another tab or company deactivation
+    // 3. Periodic check every 60 seconds to catch logout in another tab or company deactivation
     const interval = setInterval(() => {
       if (checkAuthToken()) {
         fetchCurrentUser();
       } else {
         clearInterval(interval);
       }
-    }, 5000);
+    }, 60000);
 
     return () => {
       window.removeEventListener("pageshow", handlePageShow);

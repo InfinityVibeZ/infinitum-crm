@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { PermissionGuard } from "@/components/auth/PermissionGuard";
 import { IconCrown, IconCheck, IconAlertCircle, IconLoader2 } from "@tabler/icons-react";
 
 function CreateSuperAdminForm() {
@@ -149,9 +148,5 @@ function CreateSuperAdminForm() {
 }
 
 export default function RegisterPage() {
-  return (
-    <PermissionGuard roles={["SUPER_ADMIN"]}>
-      <CreateSuperAdminForm />
-    </PermissionGuard>
-  );
+  return <CreateSuperAdminForm />;
 }

@@ -130,7 +130,6 @@ model User {
   email         String      @unique
   name          String
   passwordHash  String      @map("password_hash")
-  plainPassword String?     @map("plain_password")
   role          Role        @default(USER)
   status        UserStatus  @default(ACTIVE)
   company       String?

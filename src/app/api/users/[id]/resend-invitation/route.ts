@@ -75,7 +75,7 @@ export async function POST(
     const protocol = request.headers.get("x-forwarded-proto") || "http";
     const baseUrl = `${protocol}://${host}`;
     const setupLink = `${baseUrl}/account/setup?token=${rawToken}`;
-    const targetCompanyName = targetUser.company || targetUser.companyRef?.name || targetUser.department || "Infinitum";
+    const targetCompanyName = targetUser.company || targetUser.companyRef?.name || targetUser.department || "Infinity Vibez";
 
     // 2. Dispatch email based on role
     let mailResult: { success: boolean; setupUrl: string; error?: any };
