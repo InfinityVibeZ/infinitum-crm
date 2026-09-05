@@ -1,4 +1,3 @@
-import { hasFeature } from "@/lib/subscription";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractTokenFromRequest, getTokenPayload, getTenantWhereClauseAsync } from "@/lib/auth";
@@ -84,7 +83,6 @@ export async function POST(request: Request) {
         fileType: fileType || "application/pdf",
         dealId,
         uploadedBy: payload.userId,
-        companyId: payload.companyId as string,
       },
       include: {
         deal: true,

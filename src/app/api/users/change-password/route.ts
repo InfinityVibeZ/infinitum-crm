@@ -66,7 +66,7 @@ export async function POST(request: Request) {
       where: { id: user.id },
       data: {
         passwordHash: newPasswordHash,
-
+        plainPassword: null,
       },
     });
 
