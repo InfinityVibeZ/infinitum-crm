@@ -100,7 +100,7 @@ function getAdminStatusColor(a: { status: string; isInvitationExpired?: boolean 
 
 export default function AdminManagementPage() {
   const { user: me } = useAuthStore();
-  
+
   // Data state
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
@@ -209,15 +209,15 @@ export default function AdminManagementPage() {
 
     const matchStatus =
       statusFilter === "ALL" ||
-      (statusFilter === "ACTIVE" ? Boolean(a.isActive) : !a.isActive);
+      (statusFilter === "ACTIVE" ? a.status === "ACTIVE" : (a.status === "INACTIVE" || a.status === "PENDING"));
 
     return matchSearch && matchCompany && matchStatus;
   });
 
   const superCount = (admins || []).filter((a) => a && a.role === "SUPER_ADMIN").length;
   const adminCount = (admins || []).filter((a) => a && a.role === "ADMIN").length;
-  const activeAdminCount = (admins || []).filter((a) => a && a.isActive).length;
-  const inactiveAdminCount = (admins || []).filter((a) => a && !a.isActive).length;
+  const activeAdminCount = (admins || []).filter((a) => a && a.status === "ACTIVE").length;
+  const inactiveAdminCount = (admins || []).filter((a) => a && (a.status === "INACTIVE" || a.status === "PENDING")).length;
 
   const [resendingId, setResendingId] = useState<string | null>(null);
 
@@ -429,7 +429,7 @@ export default function AdminManagementPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => loadAll()} className="p-2 rounded-lg border border-nexus-border text-nexus-muted hover:text-nexus-text hover:bg-nexus-hover transition-colors" title="Refresh">
               <IconRefresh size={16} />
@@ -482,7 +482,7 @@ export default function AdminManagementPage() {
               <IconShieldCheck size={18} />
             </div>
             <div>
-              <p className="text-[10px] text-nexus-muted font-semibold uppercase tracking-wide">Active Admins</p>
+              <p className="text-[10px] text-nexus-muted font-semibold uppercase tracking-wide">Active</p>
               <p className="text-xl font-black text-emerald-400">{activeAdminCount}</p>
             </div>
           </div>
@@ -492,7 +492,7 @@ export default function AdminManagementPage() {
               <IconX size={18} />
             </div>
             <div>
-              <p className="text-[10px] text-nexus-muted font-semibold uppercase tracking-wide">Inactive Admins</p>
+              <p className="text-[10px] text-nexus-muted font-semibold uppercase tracking-wide">Pending & Inactive</p>
               <p className="text-xl font-black text-amber-400">{inactiveAdminCount}</p>
             </div>
           </div>
@@ -532,7 +532,7 @@ export default function AdminManagementPage() {
             >
               <option value="ALL">All Status</option>
               <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
+              <option value="INACTIVE">Pending & Inactive</option>
             </select>
 
             <span className="text-xs font-semibold text-nexus-muted whitespace-nowrap pl-1">
@@ -601,11 +601,10 @@ export default function AdminManagementPage() {
 
                       {/* Role Badge Column */}
                       <td className="px-5 py-4">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
-                          isSuper
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${isSuper
                             ? "bg-red-500/10 text-red-400 border-red-500/20"
                             : "bg-orange-500/10 text-orange-400 border-orange-500/20"
-                        }`}>
+                          }`}>
                           {isSuper ? <IconCrown size={12} /> : <IconUserShield size={12} />}
                           {isSuper ? "SUPER ADMIN" : "ADMIN"}
                         </span>
@@ -767,79 +766,78 @@ export default function AdminManagementPage() {
                 <button onClick={() => setShowAdminForm(false)} className="p-2 text-nexus-muted hover:text-nexus-text hover:bg-nexus-hover rounded-lg transition-colors"><IconX size={18} /></button>
               </div>
 
-                  <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Full Name *</label>
-                        <input value={formName} onChange={(e) => setFormName(e.target.value)} className="w-full px-3 py-2 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text focus:outline-none focus:border-nexus-primary font-medium" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Email *</label>
-                        <input
-                          type="email"
-                          value={formEmail}
-                          onChange={(e) => setFormEmail(e.target.value)}
-                          readOnly={editAdminTarget !== null}
-                          className={`w-full px-3 py-2 text-sm border rounded-lg text-nexus-text focus:outline-none ${
-                            editAdminTarget !== null
-                              ? "bg-nexus-hover border-nexus-border text-nexus-muted cursor-not-allowed font-medium"
-                              : "bg-nexus-bg border-nexus-border focus:border-nexus-primary font-medium"
-                          }`}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Phone Number</label>
-                      <input
-                        type="text"
-                        inputMode="tel"
-                        maxLength={15}
-                        value={formPhone}
-                        onChange={(e) => setFormPhone(e.target.value.replace(/[^0-9+\-\s()]/g, "").slice(0, 15))}
-                        className="w-full px-3 py-2 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text focus:outline-none focus:border-nexus-primary font-mono tracking-wider"
-                      />
-                    </div>
-
-                    {!editAdminTarget && (
-                      <div>
-                        <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Company *</label>
-                        <select
-                          value={formCompanyId}
-                          onChange={(e) => {
-                            const selectedId = e.target.value;
-                            setFormCompanyId(selectedId);
-                            const matched = activeCompanies.find((c) => c.id === selectedId);
-                            if (matched) {
-                              setFormCompanyName(matched.name);
-                              setFormCategory(matched.category || "General");
-                            } else {
-                              setFormCompanyName("");
-                              setFormCategory("");
-                            }
-                          }}
-                          className="w-full px-3 py-2 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text focus:outline-none focus:border-nexus-primary font-medium"
-                        >
-                          <option value="">Select Company</option>
-                          {activeCompanies.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Full Name *</label>
+                    <input value={formName} onChange={(e) => setFormName(e.target.value)} className="w-full px-3 py-2 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text focus:outline-none focus:border-nexus-primary font-medium" />
                   </div>
-                  <div className="flex justify-end gap-3 px-6 py-4 border-t border-nexus-border">
-                    <button onClick={() => setShowAdminForm(false)} disabled={savingAdmin} className="px-4 py-2 text-sm font-semibold text-nexus-muted border border-nexus-border rounded-lg hover:bg-nexus-hover disabled:opacity-50">Cancel</button>
-                    <button onClick={handleSaveAdmin} disabled={savingAdmin} className="px-5 py-2 text-sm font-bold bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-400 hover:to-red-500 shadow-lg shadow-red-500/20 disabled:opacity-60 flex items-center justify-center gap-2">
-                      {savingAdmin && <IconLoader2 size={16} className="animate-spin" />}
-                      {savingAdmin ? "Saving…" : editAdminTarget ? "Save Changes" : "Create Admin"}
-                    </button>
+                  <div>
+                    <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Email *</label>
+                    <input
+                      type="email"
+                      value={formEmail}
+                      onChange={(e) => setFormEmail(e.target.value)}
+                      readOnly={editAdminTarget !== null}
+                      className={`w-full px-3 py-2 text-sm border rounded-lg text-nexus-text focus:outline-none ${editAdminTarget !== null
+                          ? "bg-nexus-hover border-nexus-border text-nexus-muted cursor-not-allowed font-medium"
+                          : "bg-nexus-bg border-nexus-border focus:border-nexus-primary font-medium"
+                        }`}
+                    />
                   </div>
                 </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Phone Number</label>
+                  <input
+                    type="text"
+                    inputMode="tel"
+                    maxLength={15}
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value.replace(/[^0-9+\-\s()]/g, "").slice(0, 15))}
+                    className="w-full px-3 py-2 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text focus:outline-none focus:border-nexus-primary font-mono tracking-wider"
+                  />
+                </div>
+
+                {!editAdminTarget && (
+                  <div>
+                    <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Company *</label>
+                    <select
+                      value={formCompanyId}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        setFormCompanyId(selectedId);
+                        const matched = activeCompanies.find((c) => c.id === selectedId);
+                        if (matched) {
+                          setFormCompanyName(matched.name);
+                          setFormCategory(matched.category || "General");
+                        } else {
+                          setFormCompanyName("");
+                          setFormCategory("");
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text focus:outline-none focus:border-nexus-primary font-medium"
+                    >
+                      <option value="">Select Company</option>
+                      {activeCompanies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
-            )}
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-nexus-border">
+                <button onClick={() => setShowAdminForm(false)} disabled={savingAdmin} className="px-4 py-2 text-sm font-semibold text-nexus-muted border border-nexus-border rounded-lg hover:bg-nexus-hover disabled:opacity-50">Cancel</button>
+                <button onClick={handleSaveAdmin} disabled={savingAdmin} className="px-5 py-2 text-sm font-bold bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-400 hover:to-red-500 shadow-lg shadow-red-500/20 disabled:opacity-60 flex items-center justify-center gap-2">
+                  {savingAdmin && <IconLoader2 size={16} className="animate-spin" />}
+                  {savingAdmin ? "Saving…" : editAdminTarget ? "Save Changes" : "Create Admin"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── CONFIRM SOFT DELETE ADMIN MODAL ────────────────────────────── */}
         {confirmSoftDeleteAdmin && (
@@ -979,17 +977,15 @@ export default function AdminManagementPage() {
               </div>
               <div className="p-6 space-y-5">
                 <div className="flex items-center gap-4">
-                  <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl font-bold ${
-                    viewUser.role === "SUPER_ADMIN" ? "bg-red-500/15 text-red-400" : "bg-orange-500/15 text-orange-400"
-                  }`}>
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl font-bold ${viewUser.role === "SUPER_ADMIN" ? "bg-red-500/15 text-red-400" : "bg-orange-500/15 text-orange-400"
+                    }`}>
                     {(viewUser.name || "A").charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="text-lg font-bold text-nexus-text truncate">{viewUser.name || "—"}</h3>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        viewUser.role === "SUPER_ADMIN" ? "bg-red-500/10 text-red-400 border border-red-500/20" : "bg-orange-500/10 text-orange-400 border border-orange-500/20"
-                      }`}>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${viewUser.role === "SUPER_ADMIN" ? "bg-red-500/10 text-red-400 border border-red-500/20" : "bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                        }`}>
                         {viewUser.role === "SUPER_ADMIN" ? "Super Admin" : "Admin"}
                       </span>
                     </div>
@@ -1000,16 +996,14 @@ export default function AdminManagementPage() {
                 <div className="grid grid-cols-2 gap-3 p-4 bg-nexus-bg border border-nexus-border rounded-xl">
                   <div>
                     <p className="text-[10px] text-nexus-muted font-semibold uppercase tracking-wider mb-0.5">Account Status</p>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold ${
-                      viewUser.status === "PENDING"
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold ${viewUser.status === "PENDING"
                         ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                         : viewUser.isActive
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                        : "bg-red-500/10 text-red-400 border border-red-500/20"
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        viewUser.status === "PENDING" ? "bg-amber-400" : viewUser.isActive ? "bg-emerald-400" : "bg-red-400"
-                      }`} />
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                          : "bg-red-500/10 text-red-400 border border-red-500/20"
+                      }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${viewUser.status === "PENDING" ? "bg-amber-400" : viewUser.isActive ? "bg-emerald-400" : "bg-red-400"
+                        }`} />
                       {viewUser.status === "PENDING" ? "Pending Setup" : viewUser.isActive ? "Active" : "Inactive"}
                     </span>
                   </div>

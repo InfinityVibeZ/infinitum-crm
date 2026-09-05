@@ -131,7 +131,6 @@ function getSuperAdminMenu(): MenuSection[] {
       label: "SYSTEM CONFIG",
       icon: <IconTool size={18} />,
       items: [
-        { label: "Change Password", href: "/settings/security" },
         { label: "Menu", href: "/admin/permissions" },
         { label: "API Keys", href: "/settings/api-keys" },
       ],
@@ -260,6 +259,8 @@ const ROLE_BADGE: Record<string, { label: string; color: string }> = {
 
 // ─── Sidebar component ────────────────────────────────────────────────────────
 
+let permissionsPromise: Promise<any> | null = null;
+
 export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
@@ -287,11 +288,19 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
   });
 
   useEffect(() => {
-    fetch("/api/settings/permissions", { credentials: "same-origin" })
-      .then((res) => {
-        if (!res.ok) throw new Error("API not ok");
-        return res.json();
-      })
+    if (!permissionsPromise) {
+      permissionsPromise = fetch("/api/settings/permissions", { credentials: "same-origin" })
+        .then((res) => {
+          if (!res.ok) throw new Error("API not ok");
+          return res.json();
+        })
+        .catch((err) => {
+          permissionsPromise = null; // reset on error so we can retry
+          throw err;
+        });
+    }
+
+    permissionsPromise
       .then((data) => {
         if (data && typeof data === "object" && !data.error && Object.keys(data).length > 0) {
           setDbPermissions(data);
@@ -438,8 +447,8 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
           href={effectiveRole === "ADMIN" || effectiveRole === "USER" ? "/leads/metrics" : "/"}
           onClick={onClose}
           className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${(effectiveRole === "ADMIN" || effectiveRole === "USER" ? pathname === "/leads/metrics" : pathname === "/")
-              ? "text-[#10D078] bg-[#10D078]/10"
-              : "text-nexus-text-secondary hover:text-nexus-text hover:bg-nexus-hover"
+            ? "text-[#10D078] bg-[#10D078]/10"
+            : "text-nexus-text-secondary hover:text-nexus-text hover:bg-nexus-hover"
             }`}
         >
           <IconLayoutDashboard size={18} />
@@ -460,8 +469,8 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
                 <Link
                   href={item.href}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${isActive
-                      ? "text-[#10D078] bg-[#10D078]/10 font-bold"
-                      : "text-nexus-text-secondary hover:text-nexus-text hover:bg-nexus-hover"
+                    ? "text-[#10D078] bg-[#10D078]/10 font-bold"
+                    : "text-nexus-text-secondary hover:text-nexus-text hover:bg-nexus-hover"
                     }`}
                 >
                   {section.icon}
@@ -483,8 +492,8 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
                 type="button"
                 onClick={() => toggleSection(section.label)}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold tracking-wider transition-colors ${isSectionActive
-                    ? "text-[#10D078]"
-                    : "text-nexus-text-secondary hover:text-nexus-text hover:bg-nexus-hover"
+                  ? "text-[#10D078]"
+                  : "text-nexus-text-secondary hover:text-nexus-text hover:bg-nexus-hover"
                   }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -509,8 +518,8 @@ export function Sidebar({ onClose }: { onClose?: () => void } = {}) {
                         key={item.href}
                         href={item.href}
                         className={`block px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${isActive
-                            ? "text-[#10D078] font-bold bg-[#10D078]/10"
-                            : "text-nexus-text hover:bg-nexus-hover"
+                          ? "text-[#10D078] font-bold bg-[#10D078]/10"
+                          : "text-nexus-text hover:bg-nexus-hover"
                           }`}
                       >
                         {item.label}

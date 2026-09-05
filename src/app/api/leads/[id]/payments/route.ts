@@ -3,10 +3,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractTokenFromRequest, getTokenPayload, getTenantWhereClauseAsync } from "@/lib/auth";
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -14,13 +12,13 @@ export async function GET(
     if (!payload) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const tenantFilter = await getTenantWhereClauseAsync(payload);
-    const lead = await prisma.lead.findFirst({ where: { id: params.id, ...tenantFilter }, select: { id: true } });
+    const lead = await prisma.lead.findFirst({ where: { id: resolvedParams.id, ...tenantFilter }, select: { id: true } });
     if (!lead) {
       return NextResponse.json({ error: "Lead not found or unauthorized" }, { status: 404 });
     }
 
     const payments = await prisma.leadPayment.findMany({
-      where: { leadId: params.id },
+      where: { leadId: resolvedParams.id },
       orderBy: { paymentDate: "desc" },
     });
 
@@ -34,10 +32,8 @@ export async function GET(
   }
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -64,7 +60,7 @@ export async function POST(
 
     const tenantFilter = await getTenantWhereClauseAsync(payload);
     const lead = await prisma.lead.findFirst({
-      where: { id: params.id, ...tenantFilter },
+      where: { id: resolvedParams.id, ...tenantFilter },
     });
 
     if (!lead) {
@@ -73,7 +69,7 @@ export async function POST(
 
     const payment = await prisma.leadPayment.create({
       data: {
-        leadId: params.id,
+        leadId: resolvedParams.id,
         amount: numAmount,
         paymentDate: new Date(paymentDate),
         paymentMethod,
@@ -87,13 +83,13 @@ export async function POST(
 
     // Update cashCollected on lead if applicable
     const validPayments = await prisma.leadPayment.aggregate({
-      where: { leadId: params.id, status: "PAID" },
+      where: { leadId: resolvedParams.id, status: "PAID" },
       _sum: { amount: true },
     });
     const totalPaid = validPayments._sum.amount ? parseFloat(validPayments._sum.amount.toString()) : 0;
 
     await prisma.lead.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: { cashCollected: totalPaid },
     });
 

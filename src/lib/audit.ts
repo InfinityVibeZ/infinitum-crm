@@ -30,14 +30,16 @@ export async function logAuditEvent(options: LogAuditOptions) {
     return await prisma.auditLog.create({
       data: {
         action: options.action,
-        category: options.category || "User Management",
-        severity: options.severity || "INFO",
-        actorName: options.actorName,
-        actorEmail: options.actorEmail,
-        actorRole: options.actorRole || "SUPER_ADMIN",
-        targetName: options.targetName || null,
-        summary: options.summary,
-        details: options.details ? options.details : undefined,
+        metadata: {
+          category: options.category || "User Management",
+          severity: options.severity || "INFO",
+          actorName: options.actorName,
+          actorEmail: options.actorEmail,
+          actorRole: options.actorRole || "SUPER_ADMIN",
+          targetName: options.targetName || null,
+          summary: options.summary,
+          details: options.details ? options.details : undefined,
+        },
         ipAddress: options.ipAddress || "127.0.0.1",
       },
     });

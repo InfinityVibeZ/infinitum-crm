@@ -649,8 +649,8 @@ export default function UserManagementPage() {
 
   const onlyAdmins = adminGroups.filter((a) => a.role === "ADMIN");
   const totalAdminsCount = onlyAdmins.length;
-  const activeAdminsCount = onlyAdmins.filter((a) => a.status === "ACTIVE" && a.isActive !== false).length;
-  const inactiveAdminsCount = onlyAdmins.filter((a) => a.status === "INACTIVE" || a.isActive === false).length;
+  const activeAdminsCount = onlyAdmins.filter((a) => a.status === "ACTIVE").length;
+  const inactiveAdminsCount = onlyAdmins.filter((a) => a.status === "INACTIVE" || a.status === "PENDING").length;
 
   const validActiveCompanies = (companies || []).filter((c) => {
     if (!c || c.isActive === false || c.status === "INACTIVE") return false;
@@ -659,21 +659,26 @@ export default function UserManagementPage() {
   });
 
   const totalCompaniesCount = validActiveCompanies.length;
+  const superAdminValidUsers = users.filter((u) => {
+    if (u.role !== "USER") return false;
+    return validActiveCompanies.some(
+      (c) => c.id === u.companyId || c.name.toLowerCase().trim() === (u.company || "").toLowerCase().trim()
+    );
+  });
+
   const totalUsersCount = isSuperAdmin
-    ? users.filter((u) => {
-        if (u.role !== "USER") return false;
-        return validActiveCompanies.some(
-          (c) => c.id === u.companyId || c.name.toLowerCase().trim() === (u.company || "").toLowerCase().trim()
-        );
-      }).length
+    ? superAdminValidUsers.length
     : users.filter((u) => u.role === "USER").length;
+
+  const superAdminActiveUsersCount = superAdminValidUsers.filter((u) => u.status === "ACTIVE").length;
+  const superAdminInactiveUsersCount = superAdminValidUsers.filter((u) => u.status === "INACTIVE" || u.status === "PENDING").length;
 
   const adminRoleAdmins = users.filter((u) => u.role === "ADMIN" || u.role === "SUPER_ADMIN");
   const adminRoleUsers = users.filter((u) => u.role === "USER");
   const companyAdminCount = adminRoleAdmins.length;
   const companyUserCount = adminRoleUsers.length;
-  const companyActiveMemberCount = users.filter((u) => u.status === "ACTIVE" && u.isActive !== false).length;
-  const companyInactiveMemberCount = users.filter((u) => u.status === "INACTIVE" || u.isActive === false).length;
+  const companyActiveMemberCount = users.filter((u) => u.status === "ACTIVE").length;
+  const companyInactiveMemberCount = users.filter((u) => u.status === "INACTIVE" || u.status === "PENDING").length;
 
   // ── Filters ────────────────────────────────────────────────────────────────
 
@@ -686,7 +691,7 @@ export default function UserManagementPage() {
         u.email.toLowerCase().includes(q) ||
         (u.phone || "").toLowerCase().includes(q) ||
         (u.company || u.department || "").toLowerCase().includes(q);
-      const matchStatus = filterStatus === "ALL" || u.status === filterStatus;
+      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : (u.status === "INACTIVE" || u.status === "PENDING"));
       const matchComp = filterCompany === "ALL" || u.companyId === filterCompany || u.company === filterCompany;
       const matchRole =
         filterRole === "ALL" ||
@@ -719,7 +724,7 @@ export default function UserManagementPage() {
         const userCompMatch = (u.company || u.department || "").toLowerCase().includes(q);
         const userMatch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.phone || "").toLowerCase().includes(q) || userCompMatch;
         const matchSearch = adminMatch || userMatch;
-        const matchStatus = filterStatus === "ALL" || u.status === filterStatus;
+        const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : (u.status === "INACTIVE" || u.status === "PENDING"));
         const matchComp = filterCompany === "ALL" || u.companyId === filterCompany || u.company === filterCompany;
         const matchRole =
           filterRole === "ALL" ||
@@ -737,7 +742,7 @@ export default function UserManagementPage() {
       const adminCompMatch = (admin.company || admin.department || "").toLowerCase().includes(q);
       const adminMatch = !q || admin.name.toLowerCase().includes(q) || admin.email.toLowerCase().includes(q) || (admin.phone || "").toLowerCase().includes(q) || adminCompMatch;
       const matchCompanyFilter = filterCompany === "ALL" || admin.companyId === filterCompany || admin.company === filterCompany;
-      const matchStatus = filterStatus === "ALL" || admin.status === filterStatus;
+      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? admin.status === "ACTIVE" : (admin.status === "INACTIVE" || admin.status === "PENDING"));
       return ((adminMatch && matchCompanyFilter) || admin.users.length > 0) && matchStatus;
     });
 
@@ -756,7 +761,7 @@ export default function UserManagementPage() {
       const creatorAdmin = adminGroups.find((a) => a.id === u.createdBy);
       const creatorMatch = creatorAdmin ? (creatorAdmin.name.toLowerCase().includes(q) || creatorAdmin.email.toLowerCase().includes(q) || (creatorAdmin.phone || "").toLowerCase().includes(q)) : false;
       const matchSearch = !q || compNameMatch || userCompMatch || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.phone || "").toLowerCase().includes(q) || creatorMatch;
-      const matchStatus = filterStatus === "ALL" || u.status === filterStatus;
+      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : (u.status === "INACTIVE" || u.status === "PENDING"));
       return isComp && matchSearch && matchStatus;
     });
 
@@ -989,7 +994,7 @@ export default function UserManagementPage() {
                 {activeAdminsCount} Active
               </span>
               <span className="px-2 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/20">
-                {inactiveAdminsCount} Inactive
+                {inactiveAdminsCount} Pending/Inactive
               </span>
             </div>
           </div>
@@ -1003,7 +1008,14 @@ export default function UserManagementPage() {
               </div>
             </div>
             <p className="text-2xl font-extrabold text-nexus-text mt-2">{totalUsersCount}</p>
-            <p className="text-[11px] text-nexus-muted mt-2 font-medium">Total Managed Members</p>
+            <div className="flex items-center gap-2 mt-2 text-[11px] font-semibold">
+              <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                {superAdminActiveUsersCount} Active
+              </span>
+              <span className="px-2 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/20">
+                {superAdminInactiveUsersCount} Pending/Inactive
+              </span>
+            </div>
           </div>
         </div>
       ) : (
@@ -1047,7 +1059,7 @@ export default function UserManagementPage() {
           {/* Inactive Members */}
           <div className="bg-nexus-card border border-nexus-border rounded-xl p-4 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-nexus-muted uppercase tracking-wider">Inactive Members</span>
+              <span className="text-xs font-bold text-nexus-muted uppercase tracking-wider">Pending & Inactive</span>
               <div className="p-2 rounded-lg bg-red-500/10 text-red-400">
                 <IconX size={18} />
               </div>
@@ -1082,7 +1094,7 @@ export default function UserManagementPage() {
         >
           <option value="ALL">All Statuses</option>
           <option value="ACTIVE">Active Users</option>
-          <option value="INACTIVE">Inactive Users</option>
+          <option value="INACTIVE">Pending & Inactive</option>
         </select>
 
         {/* Company Filter (SuperAdmin Only) */}

@@ -1,0 +1,29 @@
+PrismaClientKnownRequestError: 
+Invalid `prisma.user.delete()` invocation:
+
+
+An operation failed because it depends on one or more records that were required but not found. Record to delete does not exist.
+    at $n.handleRequestError (D:\CRM\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (D:\CRM\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (D:\CRM\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (D:\CRM\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async DELETE (file:///D:/CRM/.next/dev/server/chunks/%5Broot-of-the-server%5D__1u8jdlt._.js?id=%5Bproject%5D/src/app/api/users/%5Bid%5D/route.ts+%5Bapp-route%5D+(ecmascript):494:13)
+    at async AppRouteRouteModule.do (D:\CRM\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:42793)
+    at async AppRouteRouteModule.handle (D:\CRM\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:50547)
+    at async responseGenerator (D:\CRM\.next\dev\server\chunks\node_modules_next_1vznx1i._.js:4709:30)
+    at async AppRouteRouteModule.handleResponse (D:\CRM\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:1:250435)
+    at async handleResponse (D:\CRM\.next\dev\server\chunks\node_modules_next_1vznx1i._.js:4781:32)
+    at async Module.handler (D:\CRM\.next\dev\server\chunks\node_modules_next_1vznx1i._.js:4901:9)
+    at async DevServer.renderToResponseWithComponentsImpl (D:\CRM\node_modules\next\dist\server\base-server.js:1537:9)
+    at async DevServer.renderPageComponent (D:\CRM\node_modules\next\dist\server\base-server.js:1589:24)
+    at async DevServer.renderToResponseImpl (D:\CRM\node_modules\next\dist\server\base-server.js:1639:32)
+    at async DevServer.pipeImpl (D:\CRM\node_modules\next\dist\server\base-server.js:1088:25)
+    at async NextNodeServer.handleCatchallRenderRequest (D:\CRM\node_modules\next\dist\server\next-server.js:338:17)
+    at async DevServer.handleRequestImpl (D:\CRM\node_modules\next\dist\server\base-server.js:979:17)
+    at async D:\CRM\node_modules\next\dist\server\dev\next-dev-server.js:426:20
+    at async Span.traceAsyncFn (D:\CRM\node_modules\next\dist\trace\trace.js:164:20)
+    at async DevServer.handleRequest (D:\CRM\node_modules\next\dist\server\dev\next-dev-server.js:422:24)
+    at async invokeRender (D:\CRM\node_modules\next\dist\server\lib\router-server.js:306:21)
+    at async handleRequest (D:\CRM\node_modules\next\dist\server\lib\router-server.js:508:24)
+    at async requestHandlerImpl (D:\CRM\node_modules\next\dist\server\lib\router-server.js:565:13)
+    at async Server.requestListener (D:\CRM\node_modules\next\dist\server\lib\start-server.js:225:13)

@@ -2,13 +2,11 @@ import { hasFeature } from "@/lib/subscription";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const offer = await prisma.offer.findUnique({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
     });
     if (!offer) {
       return NextResponse.json({ error: "Offer not found" }, { status: 404 });
@@ -23,16 +21,14 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const body = await request.json();
     const { name, price, description, category, status, features, isBookmarked } = body;
 
     const offer = await prisma.offer.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: {
         ...(name && { name }),
         ...(price !== undefined && { price: parseFloat(price.toString()) }),
@@ -54,20 +50,18 @@ export async function PUT(
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const body = await request.json();
 
     if (body.action === "TOGGLE_BOOKMARK") {
       const current = await prisma.offer.findUnique({
-        where: { id: params.id },
+        where: { id: resolvedParams.id },
         select: { isBookmarked: true },
       });
       const offer = await prisma.offer.update({
-        where: { id: params.id },
+        where: { id: resolvedParams.id },
         data: { isBookmarked: !current?.isBookmarked },
       });
       return NextResponse.json(offer);
@@ -75,7 +69,7 @@ export async function PATCH(
 
     if (body.action === "DUPLICATE") {
       const original = await prisma.offer.findUnique({
-        where: { id: params.id },
+        where: { id: resolvedParams.id },
       });
       if (!original) {
         return NextResponse.json({ error: "Offer not found" }, { status: 404 });
@@ -103,13 +97,11 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     await prisma.offer.delete({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
     });
     return NextResponse.json({ success: true });
   } catch (error: any) {

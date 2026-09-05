@@ -26,10 +26,8 @@ function toPrismaLeadSource(val: any): LeadSource | null {
   return LeadSource.OTHER;
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -39,7 +37,7 @@ export async function GET(
     const tenantFilter = await getTenantWhereClauseAsync(payload);
 
     const lead = await prisma.lead.findFirst({
-      where: { id: params.id, ...tenantFilter },
+      where: { id: resolvedParams.id, ...tenantFilter },
       include: {
         user: {
           select: { id: true, name: true, email: true, avatarUrl: true },
@@ -68,10 +66,8 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -82,7 +78,7 @@ export async function PUT(
     
     // Verify access before updating
     const existingLead = await prisma.lead.findFirst({
-      where: { id: params.id, ...tenantFilter },
+      where: { id: resolvedParams.id, ...tenantFilter },
     });
     if (!existingLead) {
       return NextResponse.json({ error: "Lead not found or unauthorized" }, { status: 404 });
@@ -124,7 +120,7 @@ export async function PUT(
       }
       for (const fu of followUps) {
         const existing = await prisma.followUp.findFirst({
-          where: { leadId: params.id, number: fu.number },
+          where: { leadId: resolvedParams.id, number: fu.number },
         });
 
         if (existing) {
@@ -139,7 +135,7 @@ export async function PUT(
         } else {
           await prisma.followUp.create({
             data: {
-              leadId: params.id,
+              leadId: resolvedParams.id,
               number: fu.number,
               completed: fu.completed,
               completedAt: fu.completed ? new Date() : null,
@@ -156,7 +152,7 @@ export async function PUT(
     const isStatusChanged = status !== undefined && status !== existingLead.status;
 
     const updatedLead = await prisma.lead.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: {
         ...(firstName !== undefined && { firstName }),
         ...(lastName !== undefined && { lastName }),
@@ -205,7 +201,7 @@ export async function PUT(
     if (isStatusChanged) {
       await prisma.leadStatusHistory.create({
         data: {
-          leadId: params.id,
+          leadId: resolvedParams.id,
           fromStatus: existingLead.status,
           toStatus: status,
           userId: payload.userId,
@@ -243,10 +239,8 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+
+  const resolvedParams = await params;
   try {
     const token = extractTokenFromRequest(request);
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -268,7 +262,7 @@ export async function DELETE(
 
     // Verify access before deleting
     const existingLead = await prisma.lead.findFirst({
-      where: { id: params.id, ...tenantFilter },
+      where: { id: resolvedParams.id, ...tenantFilter },
     });
     if (!existingLead) {
       return NextResponse.json({ error: "Lead not found or unauthorized" }, { status: 404 });
@@ -276,9 +270,9 @@ export async function DELETE(
 
     // Check for related payments, follow-ups, and activities
     const [paymentsCount, followUpsCount, activitiesCount] = await Promise.all([
-      prisma.leadPayment.count({ where: { leadId: params.id } }),
-      prisma.followUp.count({ where: { leadId: params.id } }),
-      prisma.activity.count({ where: { leadId: params.id } }),
+      prisma.leadPayment.count({ where: { leadId: resolvedParams.id } }),
+      prisma.followUp.count({ where: { leadId: resolvedParams.id } }),
+      prisma.activity.count({ where: { leadId: resolvedParams.id } }),
     ]);
 
     const hasRelatedData = paymentsCount > 0 || followUpsCount > 0 || activitiesCount > 0;
@@ -305,11 +299,11 @@ export async function DELETE(
 
     if (permanent && payload.role === "SUPER_ADMIN") {
       await prisma.lead.delete({
-        where: { id: params.id },
+        where: { id: resolvedParams.id },
       });
     } else {
       await prisma.lead.update({
-        where: { id: params.id },
+        where: { id: resolvedParams.id },
         data: {
           isDeleted: true,
           deletedAt: new Date(),
