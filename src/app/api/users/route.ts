@@ -394,7 +394,7 @@ export async function POST(request: Request) {
         category: category || null,
         status: "PENDING",
         modules: modules || null,
-        plainPassword: null,
+
         isDeleted: false,
       },
       select: {

@@ -1,3 +1,4 @@
+import { hasFeature } from "@/lib/subscription";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractTokenFromRequest, getTokenPayload, getTenantWhereClauseAsync } from "@/lib/auth";
@@ -78,8 +79,9 @@ export async function POST(
         paymentMethod,
         referenceId: referenceId || null,
         notes: notes || null,
-        status: "PAID",
+        status: status || "PAID",
         createdBy: payload.userId,
+        companyId: payload.companyId as string,
       },
     });
 
