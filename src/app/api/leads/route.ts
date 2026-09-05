@@ -1,3 +1,4 @@
+import { hasFeature } from "@/lib/subscription";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractTokenFromRequest, getTokenPayload, getTenantWhereClauseAsync, getUserTenantWhereClauseAsync } from "@/lib/auth";
@@ -212,7 +213,8 @@ export async function POST(request: Request) {
         cashCollected: cashCollected ? parseFloat(cashCollected) : 0,
         notes: notes || null,
         milestones: milestones || [],
-        user: { connect: { id: assignedUserId } },
+        userId: assignedUserId,
+        companyId: payload.companyId as string,
         statusHistory: {
           create: {
             fromStatus: null,
@@ -220,6 +222,7 @@ export async function POST(request: Request) {
             userId: payload.userId,
             changedAt: new Date(),
             reason: "Lead Created",
+            companyId: payload.companyId as string,
           },
         },
       },

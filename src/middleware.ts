@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getDefaultPermissionsForRole } from "@/lib/permissions";
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-change-me";
+const JWT_SECRET = process.env.JWT_SECRET as string;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is missing");
+}
 
 function base64UrlToBytes(base64Url: string): Uint8Array {
   const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");

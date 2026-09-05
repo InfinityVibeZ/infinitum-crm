@@ -1,3 +1,4 @@
+import { hasFeature } from "@/lib/subscription";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractTokenFromRequest, getTokenPayload, getTenantWhereClauseAsync } from "@/lib/auth";
@@ -126,6 +127,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         reminder: reminder || null,
         leadId: params.id,
         userId: payload.userId,
+        companyId: payload.companyId as string,
       },
     });
 
