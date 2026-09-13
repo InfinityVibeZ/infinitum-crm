@@ -18,8 +18,10 @@ model Company {
   deletedAt          DateTime?           @map("deleted_at")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
+  ownerUserId        String?             @unique @map("owner_user_id") @db.Uuid
   activities         Activity[]
   billingCustomers   BillingCustomer[]
+  owner              User?               @relation("CompanyOwner", fields: [ownerUserId], references: [id])
   deals              Deal[]
   documents          Document[]
   finances           Finance[]
@@ -34,8 +36,6 @@ model Company {
   usageCounters      UsageCounter[]
   usageEvents        UsageEvent[]
   users              User[]
-  ownerUserId        String?             @unique @map("owner_user_id") @db.Uuid
-  owner              User?               @relation("CompanyOwner", fields: [ownerUserId], references: [id])
 
   @@map("companies")
 }
@@ -62,17 +62,17 @@ model User {
   createdAt                          DateTime                          @default(now()) @map("created_at")
   updatedAt                          DateTime                          @updatedAt @map("updated_at")
   activities                         Activity[]
+  ownedCompany                       Company?                          @relation("CompanyOwner")
   deals                              Deal[]
   documents                          Document[]
   follow_ups                         follow_ups[]
   statusHistories                    LeadStatusHistory[]
   leads                              Lead[]
+  sessions                           Session[]
   subscription_entitlement_overrides SubscriptionEntitlementOverride[]
   subscription_events                SubscriptionEvent[]
   usage_events                       UsageEvent[]
-  sessions                           Session[]
   companyRef                         Company?                          @relation(fields: [companyId], references: [id])
-  ownedCompany                       Company?                          @relation("CompanyOwner")
 
   @@index([companyId])
   @@index([companyId, status])
@@ -343,7 +343,6 @@ model Session {
   expiresAt        DateTime  @map("expires_at")
   revokedAt        DateTime? @map("revoked_at")
   metadata         Json?
-
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -385,8 +384,6 @@ model Plan {
 model PlanPrice {
   id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   planId           String              @map("plan_id") @db.Uuid
-  code             String              @db.VarChar(100)
-  version          Int                 @default(1)
   billingInterval  BillingInterval     @map("billing_interval")
   intervalCount    Int                 @default(1) @map("interval_count")
   currency         String              @db.Char(3)
@@ -394,18 +391,18 @@ model PlanPrice {
   originalAmount   Decimal?            @map("original_amount") @db.Decimal(14, 2)
   discountAmount   Decimal?            @map("discount_amount") @db.Decimal(14, 2)
   discountPercent  Decimal?            @map("discount_percent") @db.Decimal(5, 2)
-  trailingDays     Int                 @default(0) @map("trailing_days")
   isActive         Boolean             @default(true) @map("is_active")
   isDefault        Boolean             @default(false) @map("is_default")
   createdAt        DateTime            @default(now()) @map("created_at")
   updatedAt        DateTime            @updatedAt @map("updated_at")
-
+  code             String              @unique @db.VarChar(100)
+  version          Int                 @default(1)
+  trailingDays     Int                 @default(0) @map("trailing_days")
   plan             Plan                @relation(fields: [planId], references: [id], onDelete: Cascade)
-  subscriptions    Subscription[]
-  eventsAsPrevious SubscriptionEvent[] @relation("PreviousPlanPrice")
   eventsAsNew      SubscriptionEvent[] @relation("NewPlanPrice")
+  eventsAsPrevious SubscriptionEvent[] @relation("PreviousPlanPrice")
+  subscriptions    Subscription[]
 
-  @@unique([code])
   @@index([planId, billingInterval])
   @@index([planId])
   @@index([isActive])
@@ -474,8 +471,6 @@ model Subscription {
   cancelAtPeriodEnd      Boolean                           @default(false) @map("cancel_at_period_end")
   scheduledPlanId        String?                           @map("scheduled_plan_id") @db.Uuid
   scheduledChangeAt      DateTime?                         @map("scheduled_change_at")
-  planPriceId            String?                           @map("plan_price_id") @db.Uuid
-  billingInterval        BillingInterval?                  @map("billing_interval")
   currency               String                            @db.Char(3)
   amount                 Decimal                           @db.Decimal(14, 2)
   quantity               Int                               @default(1)
@@ -485,6 +480,8 @@ model Subscription {
   metadata               Json?
   createdAt              DateTime                          @default(now()) @map("created_at")
   updatedAt              DateTime                          @updatedAt @map("updated_at")
+  billingInterval        BillingInterval?                  @map("billing_interval")
+  planPriceId            String?                           @map("plan_price_id") @db.Uuid
   billingSubscription    BillingSubscription?
   invoices               Invoice[]
   payments               Payment[]
@@ -537,10 +534,6 @@ model SubscriptionEvent {
   eventType                                         SubscriptionEventType   @map("event_type")
   previousPlanId                                    String?                 @map("previous_plan_id") @db.Uuid
   newPlanId                                         String?                 @map("new_plan_id") @db.Uuid
-  previousPlanPriceId                               String?                 @map("previous_plan_price_id") @db.Uuid
-  newPlanPriceId                                    String?                 @map("new_plan_price_id") @db.Uuid
-  previousBillingInterval                           BillingInterval?        @map("previous_billing_interval")
-  newBillingInterval                                BillingInterval?        @map("new_billing_interval")
   previousStatus                                    SubscriptionStatus?     @map("previous_status")
   newStatus                                         SubscriptionStatus?     @map("new_status")
   effectiveAt                                       DateTime                @map("effective_at")
@@ -552,12 +545,16 @@ model SubscriptionEvent {
   reason                                            String?
   payload                                           Json?
   createdAt                                         DateTime                @default(now()) @map("created_at")
+  newBillingInterval                                BillingInterval?        @map("new_billing_interval")
+  newPlanPriceId                                    String?                 @map("new_plan_price_id") @db.Uuid
+  previousBillingInterval                           BillingInterval?        @map("previous_billing_interval")
+  previousPlanPriceId                               String?                 @map("previous_plan_price_id") @db.Uuid
   users                                             User?                   @relation(fields: [actorId], references: [id])
   company                                           Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   plans_subscription_events_new_plan_idToplans      Plan?                   @relation("subscription_events_new_plan_idToplans", fields: [newPlanId], references: [id])
+  newPlanPrice                                      PlanPrice?              @relation("NewPlanPrice", fields: [newPlanPriceId], references: [id])
   plans_subscription_events_previous_plan_idToplans Plan?                   @relation("subscription_events_previous_plan_idToplans", fields: [previousPlanId], references: [id])
   previousPlanPrice                                 PlanPrice?              @relation("PreviousPlanPrice", fields: [previousPlanPriceId], references: [id])
-  newPlanPrice                                      PlanPrice?              @relation("NewPlanPrice", fields: [newPlanPriceId], references: [id])
   subscription                                      Subscription            @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
   @@unique([source, providerEventId])

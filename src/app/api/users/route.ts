@@ -627,12 +627,13 @@ export async function POST(request: Request) {
     let mailResult: { success: boolean; setupUrl: string; error?: any };
     if (assignedRole === "ADMIN" || assignedRole === "SUPER_ADMIN") {
       mailResult = await sendAdminInvitationEmail({
-        adminName: name,
-        adminEmail: email,
-        companyName: targetCompanyName,
-        rawToken,
-        baseUrl,
-      });
+          adminName: name,
+          adminEmail: email,
+          companyName: targetCompanyName,
+          rawToken,
+          baseUrl,
+          temporaryPassword: initialTempPassword,
+        });
       await logAuditEvent({
         action: "ADMIN_CREATED",
         category: "Admin Management",
@@ -647,12 +648,13 @@ export async function POST(request: Request) {
       });
     } else {
       mailResult = await sendUserInvitationEmail({
-        userName: name,
-        userEmail: email,
-        companyName: targetCompanyName,
-        rawToken,
-        baseUrl,
-      });
+          userName: name,
+          userEmail: email,
+          companyName: targetCompanyName,
+          rawToken,
+          baseUrl,
+          temporaryPassword: initialTempPassword,
+        });
       await logAuditEvent({
         action: "USER_CREATED",
         category: "User Management",

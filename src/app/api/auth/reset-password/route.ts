@@ -54,43 +54,41 @@ export async function POST(request: Request) {
     }
 
     // Validate token hash & purpose (PASSWORD_RESET)
-    const { valid, reason, record, user, legacyReset } = await validateToken(token, "PASSWORD_RESET");
+    const { valid, reason, record, user } = await validateToken(token, "PASSWORD_RESET");
 
-    if (!valid || !user) {
+    if (!valid || !user || !record) {
       return NextResponse.json({ error: reason || "This password reset link has expired or is no longer valid." }, { status: 400 });
     }
 
     // Hash the new password securely
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Update user password and ensure status is active
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash,
-
-        status: "ACTIVE",
-        isActive: true,
-      },
-    });
-
-    // Mark token as USED
-    if (record) {
-      await prisma.invitationToken.update({
-        where: { id: record.id },
+    // Atomically update password, mark token as used, and revoke sessions
+    await prisma.$transaction(async (tx) => {
+      // 1. Update user password and ensure status is active
+      await tx.user.update({
+        where: { id: user.id },
         data: {
-          status: "USED",
-          usedAt: new Date(),
+          passwordHash,
+          status: "ACTIVE",
+          isActive: true,
         },
       });
-    }
 
-    // Delete legacy tokens for email if any
-    if (legacyReset) {
-      await prisma.passwordResetToken.deleteMany({
-        where: { email: user.email },
-      }).catch(() => {});
-    }
+      // 2. Mark token as USED
+      await tx.passwordResetToken.update({
+        where: { id: record.id },
+        data: {
+          used_at: new Date(),
+        },
+      });
+
+      // 3. Revoke all existing sessions for this user
+      await tx.session.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
 
     // Log audit log
     await logAuditEvent({

@@ -376,6 +376,7 @@ function CompanyAccordionCard({
   onEdit,
   onToggleStatus,
   onSoftDelete,
+  onResendInvitation,
   showActions = false,
 }: {
   company: { id: string; name: string; category?: string; status?: string; isActive?: boolean };
@@ -389,6 +390,7 @@ function CompanyAccordionCard({
   onEdit: (u: AppUser) => void;
   onToggleStatus: (u: AppUser) => void;
   onSoftDelete: (u: AppUser) => void;
+  onResendInvitation?: (u: AppUser) => void;
 }) {
   const isInactive = !company.isActive || company.status === "INACTIVE";
   const totalUserCount = directUsers.length;
@@ -466,6 +468,7 @@ function CompanyAccordionCard({
                           onEdit={onEdit}
                           onToggleStatus={onToggleStatus}
                           onSoftDelete={onSoftDelete}
+                          onResendInvitation={onResendInvitation}
                         />
                       ))}
                     </tbody>
@@ -523,6 +526,7 @@ function CompanyAccordionCard({
                             onEdit={onEdit}
                             onToggleStatus={onToggleStatus}
                             onSoftDelete={onSoftDelete}
+                            onResendInvitation={onResendInvitation}
                           />
                         );
                       })}
@@ -587,7 +591,7 @@ export default function UserManagementPage() {
         method: "POST",
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to resend invitation");
+      if (!res.ok) throw new Error(data.details || data.error || "Failed to resend invitation");
       toast.success(`Activation link resent to ${u.email}`);
       fetchData(true);
     } catch (e) {
@@ -1217,6 +1221,8 @@ export default function UserManagementPage() {
               onEdit={openEdit}
               onToggleStatus={(u) => setConfirmToggleStatusUser(u)}
               onSoftDelete={(u) => setConfirmSoftDeleteUser(u)}
+              onResendInvitation={handleResendInvitation}
+              showActions={true}
             />
           ))}
         </div>

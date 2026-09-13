@@ -16,7 +16,7 @@ import {
   IconUser,
   IconMail,
   IconShieldCheck,
-  IconShieldCheck,
+
   IconClock,
 } from "@tabler/icons-react";
 import toast from "react-hot-toast";

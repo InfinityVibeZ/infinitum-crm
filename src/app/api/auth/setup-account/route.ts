@@ -40,21 +40,18 @@ export async function GET(request: Request) {
             where: {
               OR: [{ tokenHash }, { tokenHash: token }],
             },
-            include: {
-              user: {
-                select: { role: true, company: true, department: true, companyRef: { select: { name: true } } },
-              },
-            },
           });
-          if (expiredRecord?.user) {
-            expiredContext = {
-              role: expiredRecord.user.role,
-              company:
-                expiredRecord.user.company ||
-                expiredRecord.user.companyRef?.name ||
-                expiredRecord.user.department ||
-                "Infinity Vibez",
-            };
+          if (expiredRecord?.userId) {
+            const user = await prisma.user.findUnique({
+              where: { id: expiredRecord.userId },
+              select: { role: true, company: true, department: true, companyRef: { select: { name: true } } }
+            });
+            if (user) {
+              expiredContext = {
+                role: user.role,
+                company: user.company || user.companyRef?.name || user.department || "Infinity Vibez",
+              };
+            }
           }
         }
       } catch (_) { }
@@ -131,7 +128,6 @@ export async function POST(request: Request) {
     await prisma.invitationToken.update({
       where: { id: record.id },
       data: {
-        status: "USED",
         usedAt: new Date(),
       },
     });
