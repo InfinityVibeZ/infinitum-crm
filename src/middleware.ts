@@ -73,6 +73,8 @@ export async function middleware(request: NextRequest) {
     "/reset-password",
     "/account/setup",
     "/access-denied",
+    "/privacy",
+    "/data-deletion",
     "/api/auth/login",
     "/api/auth/forgot-password",
     "/api/auth/reset-password",
@@ -81,6 +83,7 @@ export async function middleware(request: NextRequest) {
     "/api/auth/signup",
     "/api/public",
     "/api/cron",
+    "/api/webhooks",
   ];
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route),

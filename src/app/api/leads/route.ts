@@ -95,11 +95,10 @@ export async function GET(request: Request) {
         deals: {
           select: { id: true, name: true, stage: true, value: true },
         },
-        followUps: {
-          orderBy: { dueDate: "asc" },
+        follow_ups: {
+          orderBy: { scheduled_at: "asc" },
         },
         payments: {
-          where: { status: "PAID" },
           orderBy: { paymentDate: "desc" },
         },
         activities: {
@@ -109,7 +108,7 @@ export async function GET(request: Request) {
           include: {
             user: { select: { id: true, name: true, email: true } },
           },
-          orderBy: { changedAt: "desc" },
+          orderBy: { createdAt: "desc" },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -131,7 +130,7 @@ export async function POST(request: Request) {
     if (auth instanceof Response) return auth;
     const { payload, user: authUser } = auth;
 
-    const featureError = await requireFeature(payload.companyId, "CRM_LEADS");
+    const featureError = await requireFeature(authUser.companyId, "CRM_LEADS");
     if (featureError) return featureError;
 
     const body = await request.json();
@@ -192,38 +191,24 @@ export async function POST(request: Request) {
 
     const newLead = await prisma.lead.create({
       data: {
-        firstName: finalFirstName,
-        lastName: finalLastName,
+        name: `${finalFirstName} ${finalLastName}`.trim(),
         email: emailValue,
         phone: cleanPhone,
         company,
-        jobTitle,
-        category,
-        location,
-        interestedProduct,
-        linkedinUrl,
-        companyWebsite,
         status: initialStatus,
         priority: priority || "MEDIUM",
-        leadSource: toPrismaLeadSource(leadSource),
-        leadType: leadType || null,
-        probability: probability ? parseInt(probability) : 0,
-        leadCreatedDate: leadCreatedDate ? new Date(leadCreatedDate) : new Date(),
-        expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null,
-        revenueGenerated: revenueGenerated ? parseFloat(revenueGenerated) : 0,
-        cashCollected: cashCollected ? parseFloat(cashCollected) : 0,
+        source: toPrismaLeadSource(leadSource),
+        value: revenueGenerated ? parseFloat(revenueGenerated) : null,
         notes: notes || null,
-        milestones: milestones || [],
         userId: assignedUserId,
-        companyId: payload.companyId as string,
+        companyId: authUser.companyId as string,
         statusHistory: {
           create: {
             fromStatus: null,
             toStatus: initialStatus,
             userId: payload.userId,
-            changedAt: new Date(),
-            reason: "Lead Created",
-            companyId: payload.companyId as string,
+            notes: "Lead Created",
+            companyId: authUser.companyId as string,
           },
         },
       },
@@ -231,7 +216,7 @@ export async function POST(request: Request) {
         user: {
           select: { id: true, name: true, email: true, avatarUrl: true, company: true, department: true, companyId: true },
         },
-        followUps: true,
+        follow_ups: true,
         statusHistory: true,
       },
     });

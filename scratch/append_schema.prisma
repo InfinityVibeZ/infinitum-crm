@@ -1,0 +1,79 @@
+
+model Conversation {
+  id                     String    @id @default(uuid()) @db.Uuid
+  company_id             String    @db.Uuid
+  contact_id             String    @db.Uuid
+  integration_id         String?   @db.Uuid
+  channel                String
+  external_conversation_id String?
+  status                 String    @default("OPEN")
+  assigned_user_id       String?   @db.Uuid
+  assigned_team_id       String?   @db.Uuid
+  last_message_at        DateTime?
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+  metadata               Json?
+
+  company                Company   @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  contact                Contact   @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  integration            Integration? @relation(fields: [integration_id], references: [id], onDelete: SetNull)
+  assigned_user          User?     @relation("ConversationAssignedUser", fields: [assigned_user_id], references: [id], onDelete: SetNull)
+  assigned_team          Team?     @relation(fields: [assigned_team_id], references: [id], onDelete: SetNull)
+  
+  participants           ConversationParticipant[]
+  messages               Message[]
+
+  @@index([company_id])
+  @@index([contact_id])
+  @@index([integration_id])
+  @@index([assigned_user_id])
+  @@index([assigned_team_id])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id                   String    @id @default(uuid()) @db.Uuid
+  conversation_id      String    @db.Uuid
+  contact_id           String?   @db.Uuid
+  external_identity_id String?
+  role                 String
+  metadata             Json?
+  created_at           DateTime  @default(now())
+
+  conversation         Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  contact              Contact?     @relation(fields: [contact_id], references: [id], onDelete: SetNull)
+
+  @@index([conversation_id])
+  @@index([contact_id])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id                  String    @id @default(uuid()) @db.Uuid
+  company_id          String    @db.Uuid
+  conversation_id     String    @db.Uuid
+  external_message_id String?
+  direction           String
+  sender_type         String
+  sender_user_id      String?   @db.Uuid
+  sender_contact_id   String?   @db.Uuid
+  content             String
+  content_type        String    @default("TEXT")
+  status              String    @default("DELIVERED")
+  error_code          String?
+  error_message       String?
+  metadata            Json?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  company             Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  conversation        Conversation  @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender_user         User?         @relation("MessageSenderUser", fields: [sender_user_id], references: [id], onDelete: SetNull)
+  sender_contact      Contact?      @relation(fields: [sender_contact_id], references: [id], onDelete: SetNull)
+
+  @@index([company_id])
+  @@index([conversation_id])
+  @@index([sender_user_id])
+  @@index([sender_contact_id])
+  @@map("messages")
+}

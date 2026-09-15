@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { encrypt } from "@/lib/encryption";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireAuthenticatedUser } from "@/lib/auth";
 
 const SMTP_CONFIG_KEYS = [
   "SMTP_HOST",
@@ -45,7 +45,8 @@ export async function PUT(request: NextRequest) {
     // 1. SUPER_ADMIN ONLY
     // ---------------------------------------------------------
 
-    await requireSuperAdmin(request);
+    const authResult = await requireAuthenticatedUser(request, ["SUPER_ADMIN"]);
+    if (authResult instanceof Response) return authResult;
 
     // ---------------------------------------------------------
     // 2. READ FORM DATA
@@ -184,14 +185,15 @@ export async function PUT(request: NextRequest) {
       { status: 500 }
     );
   }
+}
 
 // ------------------------------------------------------------------
 // GET current SMTP configuration (excluding password) for UI consumption
 // ------------------------------------------------------------------
 export async function GET(request: NextRequest) {
   try {
-    // Only SUPER_ADMIN can read the configuration
-    await requireSuperAdmin(request);
+    const authResult = await requireAuthenticatedUser(request, ["SUPER_ADMIN"]);
+    if (authResult instanceof Response) return authResult;
 
     const keys = [
       "SMTP_HOST",
@@ -233,8 +235,6 @@ export async function GET(request: NextRequest) {
     console.error("GET /api/admin/email-config error:", error);
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
-}
-
 }
 
 async function hasExistingSmtpPassword(): Promise<boolean> {
