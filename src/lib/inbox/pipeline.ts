@@ -14,10 +14,14 @@
  */
 
 import { prisma } from "../prisma";
+import { decrypt } from "@/lib/encryption";
+import { getInstagramUserProfile } from "../integrations/providers/meta";
 import { resolveContactIdentity } from "../integrations/identity-service";
-import type { NormalizedInboxEvent, InboxPipelineResult } from "./types";
+import type {
+  NormalizedInboxEvent,
+  InboxPipelineResult,
+} from "./types";
 import { Prisma } from "@prisma/client";
-
 // ── Pipeline Error ────────────────────────────────────────────────────────────
 
 export class InboxPipelineError extends Error {
@@ -69,16 +73,106 @@ export async function processInboxEvent(
 
   // ── Step 2: Derive companyId from Integration — NEVER from payload ───────
   const companyId = integration.companyId;
+  // ── Step 2.1: Resolve Instagram sender profile ───────────────────────────
+  //
+  // The webhook gives us the sender's Instagram ID, but not the
+  // human-readable username/name. Resolve it using the access token
+  // belonging to this tenant's Instagram integration.
+  //
+  // This is best-effort: failure must never prevent the message from
+  // entering the inbox.
+
+  let instagramProfile:
+    | {
+      id: string;
+      username?: string;
+      name?: string;
+    }
+    | null = null;
+
+  if (
+    event.provider === "INSTAGRAM" &&
+    event.channel === "INSTAGRAM"
+  ) {
+    try {
+      const credentialsRecord =
+        await prisma.integrationCredential.findUnique({
+          where: {
+            integrationId: event.integrationId,
+          },
+          select: {
+            encryptedData: true,
+          },
+        });
+
+      if (credentialsRecord?.encryptedData) {
+        const decryptedData = decrypt(
+          credentialsRecord.encryptedData
+        );
+
+        const credentials =
+          typeof decryptedData === "string"
+            ? JSON.parse(decryptedData)
+            : decryptedData;
+
+        instagramProfile =
+          await getInstagramUserProfile(
+            credentials,
+            event.externalSenderId
+          );
+
+        if (instagramProfile) {
+          console.log(
+            "[Inbox] Instagram sender profile resolved:",
+            {
+              senderId: event.externalSenderId,
+              username:
+                instagramProfile.username ?? null,
+              hasName:
+                !!instagramProfile.name,
+            }
+          );
+        }
+      }
+    } catch (error) {
+      console.warn(
+        "[Inbox] Instagram profile enrichment failed; continuing without profile:",
+        error instanceof Error
+          ? error.message
+          : String(error)
+      );
+    }
+  }
 
   // ── Step 3: Resolve Contact via identity engine (OUTSIDE TRANSACTION) ────
+  const instagramDisplayName =
+    instagramProfile?.name ||
+    instagramProfile?.username ||
+    null;
+
   const identityResult = await resolveContactIdentity(prisma, {
     companyId,
     provider: event.provider,
     externalId: event.externalSenderId,
     integrationId: event.integrationId,
     contactData: {
-      // Sender name is unknown from messaging events; enrich later if needed
-      name: `${event.channel} User`,
+      name:
+        instagramDisplayName ||
+        `${event.channel} User`,
+
+      customFields:
+        instagramProfile
+          ? {
+            instagram: {
+              username:
+                instagramProfile.username ?? null,
+              name:
+                instagramProfile.name ?? null,
+              externalId:
+                instagramProfile.id,
+            },
+          }
+          : undefined,
     },
   });
 
@@ -90,11 +184,90 @@ export async function processInboxEvent(
   }
 
   const contactId = identityResult.contactId;
+
   if (!contactId) {
     throw new InboxPipelineError(
       `Failed to resolve or create contact for sender ${event.externalSenderId}`,
       "CONTACT_RESOLUTION_FAILED"
     );
+  }
+
+  // ── Step 3.1: Enrich existing Instagram contact ─────────────────────────
+  //
+  // The identity engine may have already resolved an existing Contact.
+  // Older Instagram contacts may have been created as "INSTAGRAM User".
+  //
+  // Only replace the placeholder. Never overwrite a real CRM contact name.
+
+  if (
+    event.provider === "INSTAGRAM" &&
+    instagramProfile
+  ) {
+    const instagramDisplayName =
+      instagramProfile.name ||
+      instagramProfile.username;
+
+    if (instagramDisplayName) {
+      const existingContact =
+        await prisma.contact.findUnique({
+          where: {
+            id: contactId,
+          },
+          select: {
+            id: true,
+            name: true,
+            customFields: true,
+          },
+        });
+
+      if (
+        existingContact &&
+        (
+          !existingContact.name ||
+          existingContact.name === "INSTAGRAM User" ||
+          existingContact.name === "Unknown"
+        )
+      ) {
+        const existingCustomFields =
+          existingContact.customFields &&
+            typeof existingContact.customFields === "object" &&
+            !Array.isArray(existingContact.customFields)
+            ? existingContact.customFields
+            : {};
+
+        await prisma.contact.update({
+          where: {
+            id: contactId,
+          },
+          data: {
+            name: instagramDisplayName,
+            customFields: {
+              ...existingCustomFields,
+              instagram: {
+                username:
+                  instagramProfile.username ?? null,
+                name:
+                  instagramProfile.name ?? null,
+                externalId:
+                  instagramProfile.id,
+              },
+            },
+          },
+        });
+
+        console.log(
+          "[Inbox] Instagram contact enriched:",
+          {
+            contactId,
+            name: instagramDisplayName,
+            username:
+              instagramProfile.username ?? null,
+            externalId:
+              instagramProfile.id,
+          }
+        );
+      }
+    }
   }
 
   // ── Steps 4-6: Transactional ─────────────────────────────────────────────
@@ -107,12 +280,12 @@ export async function processInboxEvent(
 
     const existingConversation = event.externalConversationId
       ? await tx.conversation.findFirst({
-          where: {
-            integration_id: event.integrationId,
-            external_conversation_id: event.externalConversationId,
-          },
-          select: { id: true },
-        })
+        where: {
+          integration_id: event.integrationId,
+          external_conversation_id: event.externalConversationId,
+        },
+        select: { id: true },
+      })
       : null;
 
     let conversationId: string;

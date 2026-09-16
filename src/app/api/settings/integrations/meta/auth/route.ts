@@ -25,6 +25,11 @@ export async function GET(request: Request) {
     // Canonical redirect URI resolution
     const dbUri = await getApiKey("META_REDIRECT_URI");
     let redirectUri = dbUri;
+    console.log("[IG-OAUTH-REDIRECT-CHECK] AUTH START", {
+      redirectUri,
+      length: redirectUri.length,
+      json: JSON.stringify(redirectUri),
+    });
     let redirectUriSource = "DB";
     if (!redirectUri) {
       const url = new URL(request.url);

@@ -32,7 +32,6 @@ function LoginForm() {
         showAlert(initialError, "error");
       }
 
-      // Clean query string from browser URL bar to keep URL neat (http://localhost:3000/login)
       if (window.location.search) {
         window.history.replaceState({}, "", window.location.pathname);
       }
@@ -54,12 +53,12 @@ function LoginForm() {
       const data = await apiClient.post("/api/auth/login", { email, password });
 
       setAuth(data.user, data.token);
-      
+
       let dest = searchParams.get("redirect");
       if (!dest || dest === "/") {
         dest = data.user.role === "SUPER_ADMIN" ? "/dashboard" : "/leads/metrics";
       }
-      
+
       router.replace(dest);
     } catch (err) {
       showAlert(err instanceof Error ? err.message : "Login failed", "error");
@@ -208,22 +207,22 @@ function LoginForm() {
             {/* Content */}
             <form onSubmit={handleForgotSubmit}>
               <div className="p-6 space-y-4">
-                  <div className="space-y-4">
-                    <p className="text-xs text-nexus-text-secondary leading-relaxed">
-                      Enter the email address associated with your account, and we will send you a link to reset your password.
-                    </p>
-                    <div>
-                      <label className="text-xs font-semibold text-nexus-text-secondary mb-1.5 block">Email Address</label>
-                      <input
-                        type="email"
-                        value={forgotEmail}
-                        onChange={(e) => setForgotEmail(e.target.value)}
-                        placeholder="you@company.com"
-                        className="w-full px-3 py-2.5 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text placeholder-nexus-muted focus:outline-none focus:border-nexus-primary"
-                        required
-                      />
-                    </div>
+                <div className="space-y-4">
+                  <p className="text-xs text-nexus-text-secondary leading-relaxed">
+                    Enter the email address associated with your account, and we will send you a link to reset your password.
+                  </p>
+                  <div>
+                    <label className="text-xs font-semibold text-nexus-text-secondary mb-1.5 block">Email Address</label>
+                    <input
+                      type="email"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="you@company.com"
+                      className="w-full px-3 py-2.5 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text placeholder-nexus-muted focus:outline-none focus:border-nexus-primary"
+                      required
+                    />
                   </div>
+                </div>
               </div>
 
               {/* Footer */}
@@ -235,14 +234,14 @@ function LoginForm() {
                 >
                   Cancel
                 </button>
-                  <button
-                    type="submit"
-                    disabled={isForgotLoading}
-                    className="px-5 py-2 text-sm font-bold bg-nexus-primary text-black rounded-lg hover:bg-nexus-primary/90 transition-all flex items-center gap-2 disabled:opacity-60"
-                  >
-                    {isForgotLoading && <IconLoader2 size={14} className="animate-spin" />}
-                    Send Reset Link
-                  </button>
+                <button
+                  type="submit"
+                  disabled={isForgotLoading}
+                  className="px-5 py-2 text-sm font-bold bg-nexus-primary text-black rounded-lg hover:bg-nexus-primary/90 transition-all flex items-center gap-2 disabled:opacity-60"
+                >
+                  {isForgotLoading && <IconLoader2 size={14} className="animate-spin" />}
+                  Send Reset Link
+                </button>
               </div>
             </form>
           </div>

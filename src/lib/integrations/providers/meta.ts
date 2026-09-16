@@ -49,6 +49,81 @@ async function getMetaPlatformConfig() {
       : "",
   };
 }
+/**
+ * Fetches the Instagram profile for a message sender.
+ *
+ * This uses the access token belonging to the tenant's connected
+ * Instagram Professional account.
+ *
+ * IMPORTANT:
+ * - The access token is never returned.
+ * - Only public/profile identity fields are returned.
+ * - Failure is handled by the caller so webhook processing is not
+ *   blocked by profile enrichment.
+ */
+export async function getInstagramUserProfile(
+  credentials: any,
+  instagramUserId: string
+): Promise<{
+  id: string;
+  username?: string;
+  name?: string;
+} | null> {
+  const accessToken =
+    credentials?.accessToken ||
+    credentials?.access_token;
+
+  if (!accessToken || !instagramUserId) {
+    return null;
+  }
+
+  try {
+    const url =
+      `https://graph.instagram.com/v19.0/${encodeURIComponent(
+        instagramUserId
+      )}` +
+      `?fields=id,username,name` +
+      `&access_token=${encodeURIComponent(accessToken)}`;
+
+    const response = await fetch(url);
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.warn("[Instagram Profile] Profile lookup failed:", {
+        status: response.status,
+        userId: instagramUserId,
+        errorCode: data?.error?.code ?? data?.code ?? null,
+        errorType: data?.error?.type ?? null,
+        message: data?.error?.message ?? data?.error_message ?? null,
+      });
+
+      return null;
+    }
+
+    return {
+      id: data?.id || instagramUserId,
+      username:
+        typeof data?.username === "string"
+          ? data.username
+          : undefined,
+      name:
+        typeof data?.name === "string"
+          ? data.name
+          : undefined,
+    };
+  } catch (error) {
+    console.warn("[Instagram Profile] Lookup exception:", {
+      userId: instagramUserId,
+      error:
+        error instanceof Error
+          ? error.message
+          : String(error),
+    });
+
+    return null;
+  }
+}
 
 export const metaProvider: IntegrationProvider = {
   id: "META",
@@ -72,8 +147,8 @@ export const metaProvider: IntegrationProvider = {
      * column, so the Instagram App ID is kept explicit here temporarily.
      */
     const appId = isInstagram
-  ? config.instagramAppId
-  : config.appId;
+      ? config.instagramAppId
+      : config.appId;
 
     if (!appId) {
       throw new Error(
@@ -481,12 +556,13 @@ export const metaProvider: IntegrationProvider = {
        */
 
       const response = await fetch(
-        `https://graph.instagram.com/v19.0/me?fields=id,username,name&access_token=${encodeURIComponent(
+        `https://graph.instagram.com/v19.0/me?fields=id,user_id,username,name,account_type&access_token=${encodeURIComponent(
           accessToken
         )}`
       );
 
       const data = await response.json();
+      console.log("[IG-OAUTH-FULL-METADATA]", JSON.stringify(data, null, 2));
 
       console.log("[IG-OAUTH-FIX] Instagram account metadata:", {
         status: response.status,
@@ -537,9 +613,9 @@ export const metaProvider: IntegrationProvider = {
         );
       }
 
-      if (!data.id) {
+      if (!data.user_id) {
         throw new Error(
-          "Instagram account ID was not returned"
+          "Instagram Professional Account ID (user_id) was not returned"
         );
       }
 
@@ -549,7 +625,7 @@ export const metaProvider: IntegrationProvider = {
       });
 
       return {
-        id: data.id,
+        id: data.user_id,
         name:
           data.username ||
           data.name ||

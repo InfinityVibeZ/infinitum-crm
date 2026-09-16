@@ -24,7 +24,13 @@ export async function GET(req: NextRequest) {
       }),
       include: {
         contact: {
-          select: { id: true, name: true, email: true, phone: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            customFields: true,
+          },
         },
         integration: {
           select: { id: true, provider: true },

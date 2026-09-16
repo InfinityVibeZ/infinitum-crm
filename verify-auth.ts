@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
-const API_URL = "http://localhost:3000/api";
+const API_URL = "https://localhost:3000/api";
 let email = "test_auth_user@example.com";
 let password = "TestPassword123!";
 
@@ -33,7 +33,7 @@ async function runTests() {
     }
 
     console.log("1. VERIFY SESSION MODEL: PASS (inspected manually)");
-    
+
     console.log("\n=== 2. VERIFY LOGIN ===");
     let res = await fetch(`${API_URL}/auth/login`, {
       method: "POST",
@@ -42,10 +42,10 @@ async function runTests() {
     });
     let data = await res.json();
     let cookies = res.headers.getSetCookie() || [];
-    
+
     let accessTokenCookie = cookies.find((c: string) => c.startsWith("nexus-access-token="));
     let refreshTokenCookie = cookies.find((c: string) => c.startsWith("nexus-refresh-token="));
-    
+
     if (res.ok && accessTokenCookie && refreshTokenCookie) {
       console.log("Login successful, cookies received.");
       const sessions = await prisma.session.findMany({ where: { userId: user.id } });
@@ -57,11 +57,11 @@ async function runTests() {
     } else {
       console.log("Login FAIL", data, cookies);
     }
-    
+
     let at = accessTokenCookie.split(";")[0].split("=")[1];
     let rt = refreshTokenCookie.split(";")[0].split("=")[1];
     let cookieHeaderString = `${accessTokenCookie.split(";")[0]}; ${refreshTokenCookie.split(";")[0]}`;
-    
+
     console.log("\n=== 12. VERIFY ACCESS TOKEN LIFETIME ===");
     let payloadStr = Buffer.from(at.split('.')[1], 'base64').toString();
     let payload = JSON.parse(payloadStr);
@@ -69,7 +69,7 @@ async function runTests() {
     console.log(`Access Token lifetime: ${lifetimeMinutes} minutes (Expected: 15)`);
     if (lifetimeMinutes === 15) console.log("Access token lifetime: PASS");
     else console.log("Access token lifetime: FAIL");
-    
+
     console.log("\n=== 4. VERIFY REFRESH ===");
     res = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
@@ -86,15 +86,15 @@ async function runTests() {
       } else {
         console.log("Refresh token rotation performed: FAIL");
       }
-      
+
       const sessionAfterRefresh = await prisma.session.findFirst({ where: { userId: user.id } });
       let isMatch = await bcrypt.compare(rt, sessionAfterRefresh.refreshTokenHash);
       if (isMatch) {
-         console.log("Old refresh token still in DB! FAIL (should be rotated)");
+        console.log("Old refresh token still in DB! FAIL (should be rotated)");
       } else {
-         console.log("Old refresh token hash updated! PASS");
+        console.log("Old refresh token hash updated! PASS");
       }
-      
+
       res = await fetch(`${API_URL}/auth/refresh`, {
         method: "POST",
         headers: { "Cookie": `nexus-refresh-token=${rt}` }
@@ -119,7 +119,7 @@ async function runTests() {
     } else {
       console.log("Refresh endpoint rejected inactive user: FAIL", res.status);
     }
-    
+
     res = await fetch(`${API_URL}/auth/me`, {
       headers: { "Cookie": cookieHeaderString }
     });
@@ -128,7 +128,7 @@ async function runTests() {
     } else {
       console.log("Protected API rejected inactive user: FAIL", res.status);
     }
-    
+
     await prisma.user.update({ where: { email }, data: { status: "ACTIVE" } });
 
     console.log("\n=== 3. VERIFY LOGOUT ===");

@@ -20,33 +20,33 @@ model Company {
   updatedAt          DateTime             @updatedAt @map("updated_at")
   ownerUserId        String?              @unique @map("owner_user_id") @db.Uuid
   activities         Activity[]
+  attributionTouches AttributionTouch[]
   billingCustomers   BillingCustomer[]
   owner              User?                @relation("CompanyOwner", fields: [ownerUserId], references: [id])
+  contactIdentities  ContactIdentity[]
+  contacts           Contact[]
+  Conversation       Conversation[]
   deals              Deal[]
   documents          Document[]
   finances           Finance[]
   follow_ups         follow_ups[]
+  IntegrationAsset   IntegrationAsset[]
+  integrations       Integration[]
   invoices           Invoice[]
+  assignmentRules    LeadAssignmentRule[]
+  leadAssignments    LeadAssignment[]
   leadPayments       LeadPayment[]
   leadStatusHistory  LeadStatusHistory[]
   leads              Lead[]
+  Message            Message[]
   payments           Payment[]
   subscriptionEvents SubscriptionEvent[]
   subscription       Subscription?
+  teams              Team[]
   usageCounters      UsageCounter[]
   usageEvents        UsageEvent[]
-  users              User[]
-  integrations       Integration[]
-  IntegrationAsset   IntegrationAsset[]
-  contacts           Contact[]
-  contactIdentities  ContactIdentity[]
-  attributionTouches AttributionTouch[]
-  teams              Team[]
   userTeams          UserTeam[]
-  assignmentRules    LeadAssignmentRule[]
-  leadAssignments    LeadAssignment[]
-  Conversation       Conversation[]
-  Message            Message[]
+  users              User[]
 
   @@map("companies")
 }
@@ -74,19 +74,19 @@ model User {
   updatedAt                          DateTime                          @updatedAt @map("updated_at")
   activities                         Activity[]
   ownedCompany                       Company?                          @relation("CompanyOwner")
+  conversations_assigned             Conversation[]                    @relation("ConversationAssignedUser")
   deals                              Deal[]
   documents                          Document[]
   follow_ups                         follow_ups[]
   statusHistories                    LeadStatusHistory[]
   leads                              Lead[]
-  sessions                           Session[]
-  conversations_assigned             Conversation[]                    @relation("ConversationAssignedUser")
   messages_sent                      Message[]                         @relation("MessageSenderUser")
+  sessions                           Session[]
   subscription_entitlement_overrides SubscriptionEntitlementOverride[]
   subscription_events                SubscriptionEvent[]
   usage_events                       UsageEvent[]
-  companyRef                         Company?                          @relation(fields: [companyId], references: [id])
   teams                              UserTeam[]
+  companyRef                         Company?                          @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
   @@index([companyId, status])
@@ -94,64 +94,52 @@ model User {
 }
 
 model Contact {
-  id              String    @id @default(uuid()) @db.Uuid
-  companyId       String    @map("company_id") @db.Uuid
-  name            String
-  email           String?
-  normalizedEmail String?   @map("normalized_email")
-  phone           String?
-  normalizedPhone String?   @map("normalized_phone")
-  companyName     String?   @map("company_name")
-  jobTitle        String?   @map("job_title")
-  city            String?
-  state           String?
-  country         String?
-  postalCode      String?   @map("postal_code")
-  customFields    Json?     @map("custom_fields")
-  isDeleted       Boolean   @default(false) @map("is_deleted")
-  deletedAt       DateTime? @map("deleted_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  companyRef              Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  identities              ContactIdentity[]
-  leads                   Lead[]
+  id                      String                    @id @default(uuid()) @db.Uuid
+  companyId               String                    @map("company_id") @db.Uuid
+  name                    String
+  email                   String?
+  phone                   String?
+  companyName             String?                   @map("company_name")
+  jobTitle                String?                   @map("job_title")
+  city                    String?
+  state                   String?
+  country                 String?
+  postalCode              String?                   @map("postal_code")
+  customFields            Json?                     @map("custom_fields")
+  isDeleted               Boolean                   @default(false) @map("is_deleted")
+  deletedAt               DateTime?                 @map("deleted_at")
+  createdAt               DateTime                  @default(now()) @map("created_at")
+  updatedAt               DateTime                  @updatedAt @map("updated_at")
+  normalizedEmail         String?                   @map("normalized_email")
+  normalizedPhone         String?                   @map("normalized_phone")
   attributionTouches      AttributionTouch[]
-  Conversation            Conversation[]
+  identities              ContactIdentity[]
+  companyRef              Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   ConversationParticipant ConversationParticipant[]
+  Conversation            Conversation[]
+  leads                   Lead[]
   Message                 Message[]
 
   @@unique([companyId, normalizedEmail])
   @@unique([companyId, normalizedPhone])
-  // Phone uniqueness is trickier because of formatting, so we'll index it but enforce logic in code
   @@index([companyId, phone])
   @@index([companyId])
   @@map("contacts")
-}
-
-enum ContactIdentityType {
-  EMAIL
-  PHONE
-  PROVIDER_EXTERNAL_ID
-  SOCIAL_PROFILE
-  WEBSITE_USER
-  OTHER
 }
 
 model ContactIdentity {
   id            String              @id @default(uuid()) @db.Uuid
   companyId     String              @map("company_id") @db.Uuid
   contactId     String              @map("contact_id") @db.Uuid
-  provider      String // META, GOOGLE, etc
-  identityType  ContactIdentityType @default(PROVIDER_EXTERNAL_ID) @map("identity_type")
+  provider      String
   integrationId String?             @map("integration_id") @db.Uuid
   externalId    String              @map("external_id")
-  metadata      Json?
   createdAt     DateTime            @default(now()) @map("created_at")
   updatedAt     DateTime            @updatedAt @map("updated_at")
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  identityType  ContactIdentityType @default(PROVIDER_EXTERNAL_ID) @map("identity_type")
+  metadata      Json?
+  company       Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contact       Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, provider, externalId])
   @@index([contactId])
@@ -159,63 +147,55 @@ model ContactIdentity {
 }
 
 model Lead {
-  id        String      @id @default(uuid()) @db.Uuid
-  companyId String      @map("company_id") @db.Uuid
-  contactId String?     @map("contact_id") @db.Uuid
-  name      String
-  email     String?
-  phone     String?
-  company   String?
-  status    LeadStatus  @default(NEW)
-  source    LeadSource?
-
-  // Attribution & Acquisition
-  sourcePlatform String? @map("source_platform") // META
-  externalLeadId String? @map("external_lead_id")
-  integrationId  String? @map("integration_id") @db.Uuid
-  adId           String? @map("ad_id")
-  adSetId        String? @map("ad_set_id")
-  campaignId     String? @map("campaign_id")
-  creativeId     String? @map("creative_id")
-  formId         String? @map("form_id")
-  pageId         String? @map("page_id")
-  utmSource      String? @map("utm_source")
-  utmMedium      String? @map("utm_medium")
-  utmCampaign    String? @map("utm_campaign")
-  utmTerm        String? @map("utm_term")
-  utmContent     String? @map("utm_content")
-
-  priority      Priority            @default(MEDIUM)
-  value         Decimal?            @db.Decimal(14, 2)
-  notes         String?
-  userId        String              @map("user_id") @db.Uuid
-  isDeleted     Boolean             @default(false) @map("is_deleted")
-  deletedAt     DateTime?           @map("deleted_at")
-  createdAt     DateTime            @default(now()) @map("created_at")
-  updatedAt     DateTime            @updatedAt @map("updated_at")
-  activities    Activity[]
-  deals         Deal[]
-  follow_ups    follow_ups[]
-  payments      LeadPayment[]
-  statusHistory LeadStatusHistory[]
-  companyRef    Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user          User                @relation(fields: [userId], references: [id])
-  contact       Contact?            @relation(fields: [contactId], references: [id])
-
-  firstTouchId      String? @map("first_touch_id") @db.Uuid
-  lastTouchId       String? @map("last_touch_id") @db.Uuid
-  conversionTouchId String? @map("conversion_touch_id") @db.Uuid
-
-  firstTouch      AttributionTouch? @relation("LeadFirstTouch", fields: [firstTouchId], references: [id])
-  lastTouch       AttributionTouch? @relation("LeadLastTouch", fields: [lastTouchId], references: [id])
-  conversionTouch AttributionTouch? @relation("LeadConversionTouch", fields: [conversionTouchId], references: [id])
-
-  attributionTouches AttributionTouch[] @relation("LeadTouches")
+  id                 String              @id @default(uuid()) @db.Uuid
+  companyId          String              @map("company_id") @db.Uuid
+  name               String
+  email              String?
+  phone              String?
+  company            String?
+  status             LeadStatus          @default(NEW)
+  source             LeadSource?
+  priority           Priority            @default(MEDIUM)
+  value              Decimal?            @db.Decimal(14, 2)
+  notes              String?
+  userId             String              @map("user_id") @db.Uuid
+  isDeleted          Boolean             @default(false) @map("is_deleted")
+  deletedAt          DateTime?           @map("deleted_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  adId               String?             @map("ad_id")
+  adSetId            String?             @map("ad_set_id")
+  campaignId         String?             @map("campaign_id")
+  contactId          String?             @map("contact_id") @db.Uuid
+  creativeId         String?             @map("creative_id")
+  externalLeadId     String?             @map("external_lead_id")
+  formId             String?             @map("form_id")
+  integrationId      String?             @map("integration_id") @db.Uuid
+  pageId             String?             @map("page_id")
+  sourcePlatform     String?             @map("source_platform")
+  utmCampaign        String?             @map("utm_campaign")
+  utmContent         String?             @map("utm_content")
+  utmMedium          String?             @map("utm_medium")
+  utmSource          String?             @map("utm_source")
+  utmTerm            String?             @map("utm_term")
+  conversionTouchId  String?             @map("conversion_touch_id") @db.Uuid
+  firstTouchId       String?             @map("first_touch_id") @db.Uuid
+  lastTouchId        String?             @map("last_touch_id") @db.Uuid
+  activities         Activity[]
+  attributionTouches AttributionTouch[]  @relation("LeadTouches")
+  deals              Deal[]
+  follow_ups         follow_ups[]
   assignments        LeadAssignment[]
+  payments           LeadPayment[]
+  statusHistory      LeadStatusHistory[]
+  companyRef         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contact            Contact?            @relation(fields: [contactId], references: [id])
+  conversionTouch    AttributionTouch?   @relation("LeadConversionTouch", fields: [conversionTouchId], references: [id])
+  firstTouch         AttributionTouch?   @relation("LeadFirstTouch", fields: [firstTouchId], references: [id])
+  lastTouch          AttributionTouch?   @relation("LeadLastTouch", fields: [lastTouchId], references: [id])
+  user               User                @relation(fields: [userId], references: [id])
 
-  // Retain legacy unique constraint but ideally contact handles uniqueness in the future
   @@unique([companyId, email])
-  // Idempotency constraint for external leads
   @@unique([companyId, integrationId, externalLeadId])
   @@index([companyId])
   @@index([companyId, status])
@@ -224,89 +204,43 @@ model Lead {
   @@map("leads")
 }
 
-enum AttributionPlatform {
-  META
-  GOOGLE
-  TIKTOK
-  LINKEDIN
-  WEBSITE
-  ORGANIC
-  REFERRAL
-  MANUAL
-  IMPORT
-  OTHER
-  UNKNOWN
-}
-
-enum AttributionChannel {
-  FACEBOOK
-  INSTAGRAM
-  SEARCH
-  DISPLAY
-  WEBSITE
-  EMAIL
-  REFERRAL
-  DIRECT
-  OTHER
-  UNKNOWN
-}
-
-enum AttributionSourceType {
-  LEAD_AD
-  WEBSITE_FORM
-  ORGANIC
-  REFERRAL
-  MANUAL
-  IMPORT
-  API
-  UNKNOWN
-}
-
 model AttributionTouch {
-  id            String  @id @default(uuid()) @db.Uuid
-  companyId     String  @map("company_id") @db.Uuid
-  contactId     String? @map("contact_id") @db.Uuid
-  leadId        String? @map("lead_id") @db.Uuid
-  integrationId String? @map("integration_id") @db.Uuid
+  id                   String                @id @default(uuid()) @db.Uuid
+  companyId            String                @map("company_id") @db.Uuid
+  contactId            String?               @map("contact_id") @db.Uuid
+  leadId               String?               @map("lead_id") @db.Uuid
+  integrationId        String?               @map("integration_id") @db.Uuid
+  platform             AttributionPlatform   @default(UNKNOWN)
+  channel              AttributionChannel    @default(UNKNOWN)
+  sourceType           AttributionSourceType @default(UNKNOWN)
+  campaignId           String?               @map("campaign_id")
+  campaignName         String?               @map("campaign_name")
+  adSetId              String?               @map("ad_set_id")
+  adSetName            String?               @map("ad_set_name")
+  adId                 String?               @map("ad_id")
+  adName               String?               @map("ad_name")
+  creativeId           String?               @map("creative_id")
+  creativeName         String?               @map("creative_name")
+  formId               String?               @map("form_id")
+  formName             String?               @map("form_name")
+  externalEventId      String?               @map("external_event_id")
+  landingPage          String?               @map("landing_page")
+  referrer             String?               @map("referrer")
+  utmSource            String?               @map("utm_source")
+  utmMedium            String?               @map("utm_medium")
+  utmCampaign          String?               @map("utm_campaign")
+  utmTerm              String?               @map("utm_term")
+  utmContent           String?               @map("utm_content")
+  capturedAt           DateTime              @default(now()) @map("captured_at")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contact              Contact?              @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  lead                 Lead?                 @relation("LeadTouches", fields: [leadId], references: [id], onDelete: Cascade)
+  leadsConversionTouch Lead[]                @relation("LeadConversionTouch")
+  leadsFirstTouch      Lead[]                @relation("LeadFirstTouch")
+  leadsLastTouch       Lead[]                @relation("LeadLastTouch")
 
-  platform   AttributionPlatform   @default(UNKNOWN)
-  channel    AttributionChannel    @default(UNKNOWN)
-  sourceType AttributionSourceType @default(UNKNOWN)
-
-  campaignId   String? @map("campaign_id")
-  campaignName String? @map("campaign_name")
-  adSetId      String? @map("ad_set_id")
-  adSetName    String? @map("ad_set_name")
-  adId         String? @map("ad_id")
-  adName       String? @map("ad_name")
-  creativeId   String? @map("creative_id")
-  creativeName String? @map("creative_name")
-  formId       String? @map("form_id")
-  formName     String? @map("form_name")
-
-  externalEventId String? @map("external_event_id")
-  landingPage     String? @map("landing_page")
-  referrer        String? @map("referrer")
-
-  utmSource   String? @map("utm_source")
-  utmMedium   String? @map("utm_medium")
-  utmCampaign String? @map("utm_campaign")
-  utmTerm     String? @map("utm_term")
-  utmContent  String? @map("utm_content")
-
-  capturedAt DateTime @default(now()) @map("captured_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  contact Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  lead    Lead?    @relation("LeadTouches", fields: [leadId], references: [id], onDelete: Cascade)
-
-  leadsFirstTouch      Lead[] @relation("LeadFirstTouch")
-  leadsLastTouch       Lead[] @relation("LeadLastTouch")
-  leadsConversionTouch Lead[] @relation("LeadConversionTouch")
-
-  // Deduplication based on external event ID within a platform/tenant
   @@unique([companyId, platform, externalEventId])
   @@index([companyId])
   @@index([contactId])
@@ -1048,6 +982,298 @@ model follow_ups {
   @@index([user_id])
 }
 
+model Integration {
+  id             String                    @id @default(uuid()) @db.Uuid
+  companyId      String                    @map("company_id") @db.Uuid
+  provider       String
+  type           String
+  externalId     String                    @map("external_id")
+  displayName    String                    @map("display_name")
+  status         IntegrationStatus         @default(PENDING)
+  connectionMeta Json?                     @map("connection_meta")
+  lastSyncAt     DateTime?                 @map("last_sync_at")
+  errorMessage   String?                   @map("error_message")
+  isActive       Boolean                   @default(true) @map("is_active")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+  Conversation   Conversation[]
+  assets         IntegrationAsset[]
+  credentials    IntegrationCredential?
+  webhookEvents  IntegrationWebhookEvent[]
+  company        Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, provider, type, externalId])
+  @@index([companyId])
+  @@index([provider, type])
+  @@map("integrations")
+}
+
+model IntegrationCredential {
+  id            String      @id @default(uuid()) @db.Uuid
+  integrationId String      @unique @map("integration_id") @db.Uuid
+  encryptedData String      @map("encrypted_data")
+  expiresAt     DateTime?   @map("expires_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@map("integration_credentials")
+}
+
+model IntegrationAsset {
+  id            String      @id @default(uuid()) @db.Uuid
+  integrationId String      @map("integration_id") @db.Uuid
+  companyId     String      @map("company_id") @db.Uuid
+  name          String
+  metadata      Json?
+  isActive      Boolean     @default(true) @map("is_active")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  externalId    String      @map("external_id")
+  provider      String
+  assetType     String      @map("asset_type")
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, assetType, externalId])
+  @@index([companyId])
+  @@index([integrationId])
+  @@map("integration_assets")
+}
+
+model Team {
+  id           String         @id @default(uuid()) @db.Uuid
+  companyId    String         @map("company_id") @db.Uuid
+  name         String
+  isActive     Boolean        @default(true) @map("is_active")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  Conversation Conversation[]
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  members      UserTeam[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("teams")
+}
+
+model UserTeam {
+  userId    String   @map("user_id") @db.Uuid
+  teamId    String   @map("team_id") @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, teamId])
+  @@index([companyId])
+  @@map("user_teams")
+}
+
+model LeadAssignmentRule {
+  id           String             @id @default(uuid()) @db.Uuid
+  companyId    String             @map("company_id") @db.Uuid
+  name         String
+  description  String?
+  priority     Int
+  enabled      Boolean            @default(true)
+  strategy     AssignmentStrategy
+  targetUserId String?            @map("target_user_id") @db.Uuid
+  targetTeamId String?            @map("target_team_id") @db.Uuid
+  cursor       Json?
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignments  LeadAssignment[]
+
+  @@index([companyId, enabled, priority])
+  @@map("lead_assignment_rules")
+}
+
+model LeadAssignment {
+  id             String              @id @default(uuid()) @db.Uuid
+  companyId      String              @map("company_id") @db.Uuid
+  leadId         String              @map("lead_id") @db.Uuid
+  assignedUserId String?             @map("assigned_user_id") @db.Uuid
+  assignedTeamId String?             @map("assigned_team_id") @db.Uuid
+  ruleId         String?             @map("rule_id") @db.Uuid
+  strategy       AssignmentStrategy
+  trigger        AssignmentTrigger
+  status         AssignmentStatus    @default(ASSIGNED)
+  reason         String?
+  assignedAt     DateTime            @default(now()) @map("assigned_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  company        Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lead           Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  rule           LeadAssignmentRule? @relation(fields: [ruleId], references: [id])
+
+  @@unique([leadId, trigger])
+  @@index([companyId])
+  @@index([assignedUserId])
+  @@map("lead_assignments")
+}
+
+model IntegrationWebhookEvent {
+  id              String        @id @default(uuid()) @db.Uuid
+  provider        String
+  integrationId   String?       @map("integration_id") @db.Uuid
+  externalEventId String        @map("external_event_id")
+  eventType       String        @map("event_type")
+  payload         Json
+  status          WebhookStatus @default(PENDING)
+  errorMessage    String?       @map("error_message")
+  receivedAt      DateTime      @default(now()) @map("received_at")
+  processedAt     DateTime?     @map("processed_at")
+  retryCount      Int           @default(0) @map("retry_count")
+  integration     Integration?  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalEventId])
+  @@index([status])
+  @@index([integrationId])
+  @@map("integration_webhook_events")
+}
+
+model PlatformMetaConfiguration {
+  id                          String   @id @default(uuid()) @db.Uuid
+  appId                       String
+  encryptedAppSecret          String
+  encryptedWebhookVerifyToken String
+  enabled                     Boolean  @default(false)
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+  instagramConfigId           String?
+  facebookConfigId            String?
+  instagramAppId              String?
+  encryptedInstagramAppSecret String?
+
+  @@map("platform_meta_configurations")
+}
+
+model Conversation {
+  id                       String                    @id @default(uuid()) @db.Uuid
+  company_id               String                    @db.Uuid
+  contact_id               String                    @db.Uuid
+  integration_id           String?                   @db.Uuid
+  channel                  String
+  external_conversation_id String?
+  status                   String                    @default("OPEN")
+  assigned_user_id         String?                   @db.Uuid
+  assigned_team_id         String?                   @db.Uuid
+  last_message_at          DateTime?
+  created_at               DateTime                  @default(now())
+  updated_at               DateTime                  @updatedAt
+  metadata                 Json?
+  participants             ConversationParticipant[]
+  assigned_team            Team?                     @relation(fields: [assigned_team_id], references: [id])
+  assigned_user            User?                     @relation("ConversationAssignedUser", fields: [assigned_user_id], references: [id])
+  company                  Company                   @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  contact                  Contact                   @relation(fields: [contact_id], references: [id], onDelete: Cascade)
+  integration              Integration?              @relation(fields: [integration_id], references: [id])
+  messages                 Message[]
+
+  @@unique([integration_id, external_conversation_id])
+  @@index([company_id])
+  @@index([contact_id])
+  @@index([integration_id])
+  @@index([assigned_user_id])
+  @@index([assigned_team_id])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id                   String       @id @default(uuid()) @db.Uuid
+  conversation_id      String       @db.Uuid
+  contact_id           String?      @db.Uuid
+  external_identity_id String?
+  role                 String
+  metadata             Json?
+  created_at           DateTime     @default(now())
+  contact              Contact?     @relation(fields: [contact_id], references: [id])
+  conversation         Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id])
+  @@index([contact_id])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id                  String       @id @default(uuid()) @db.Uuid
+  company_id          String       @db.Uuid
+  conversation_id     String       @db.Uuid
+  external_message_id String?
+  direction           String
+  sender_type         String
+  sender_user_id      String?      @db.Uuid
+  sender_contact_id   String?      @db.Uuid
+  content             String
+  content_type        String       @default("TEXT")
+  status              String       @default("DELIVERED")
+  error_code          String?
+  error_message       String?
+  metadata            Json?
+  created_at          DateTime     @default(now())
+  updated_at          DateTime     @updatedAt
+  company             Company      @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  conversation        Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender_contact      Contact?     @relation(fields: [sender_contact_id], references: [id])
+  sender_user         User?        @relation("MessageSenderUser", fields: [sender_user_id], references: [id])
+
+  @@unique([conversation_id, external_message_id])
+  @@index([company_id])
+  @@index([conversation_id])
+  @@index([sender_user_id])
+  @@index([sender_contact_id])
+  @@map("messages")
+}
+
+enum ContactIdentityType {
+  EMAIL
+  PHONE
+  PROVIDER_EXTERNAL_ID
+  SOCIAL_PROFILE
+  WEBSITE_USER
+  OTHER
+}
+
+enum AttributionPlatform {
+  META
+  GOOGLE
+  TIKTOK
+  LINKEDIN
+  WEBSITE
+  ORGANIC
+  REFERRAL
+  MANUAL
+  IMPORT
+  OTHER
+  UNKNOWN
+}
+
+enum AttributionChannel {
+  FACEBOOK
+  INSTAGRAM
+  SEARCH
+  DISPLAY
+  WEBSITE
+  EMAIL
+  REFERRAL
+  DIRECT
+  OTHER
+  UNKNOWN
+}
+
+enum AttributionSourceType {
+  LEAD_AD
+  WEBSITE_FORM
+  ORGANIC
+  REFERRAL
+  MANUAL
+  IMPORT
+  API
+  UNKNOWN
+}
+
 enum Role {
   ADMIN
   USER
@@ -1299,66 +1525,6 @@ enum BillingWebhookStatus {
   IGNORED
 }
 
-model Integration {
-  id             String                    @id @default(uuid()) @db.Uuid
-  companyId      String                    @map("company_id") @db.Uuid
-  provider       String
-  type           String
-  externalId     String                    @map("external_id")
-  displayName    String                    @map("display_name")
-  status         IntegrationStatus         @default(PENDING)
-  connectionMeta Json?                     @map("connection_meta")
-  lastSyncAt     DateTime?                 @map("last_sync_at")
-  errorMessage   String?                   @map("error_message")
-  isActive       Boolean                   @default(true) @map("is_active")
-  createdAt      DateTime                  @default(now()) @map("created_at")
-  updatedAt      DateTime                  @updatedAt @map("updated_at")
-  company        Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  credentials    IntegrationCredential?
-  webhookEvents  IntegrationWebhookEvent[]
-  assets         IntegrationAsset[]
-  Conversation   Conversation[]
-
-  @@unique([companyId, provider, type, externalId])
-  @@index([companyId])
-  @@index([provider, type])
-  @@map("integrations")
-}
-
-model IntegrationCredential {
-  id            String      @id @default(uuid()) @db.Uuid
-  integrationId String      @unique @map("integration_id") @db.Uuid
-  encryptedData String      @map("encrypted_data")
-  expiresAt     DateTime?   @map("expires_at")
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
-  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-
-  @@map("integration_credentials")
-}
-
-model IntegrationAsset {
-  id            String   @id @default(uuid()) @db.Uuid
-  integrationId String   @map("integration_id") @db.Uuid
-  companyId     String   @map("company_id") @db.Uuid
-  provider      String
-  assetType     String   @map("asset_type")
-  externalId    String   @map("external_id")
-  name          String
-  metadata      Json?
-  isActive      Boolean  @default(true) @map("is_active")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@unique([integrationId, assetType, externalId])
-  @@index([companyId])
-  @@index([integrationId])
-  @@map("integration_assets")
-}
-
 enum AssignmentStrategy {
   SPECIFIC_USER
   TEAM
@@ -1379,110 +1545,11 @@ enum AssignmentTrigger {
   SYSTEM_RETRY
 }
 
-model Team {
-  id        String   @id @default(uuid()) @db.Uuid
-  companyId String   @map("company_id") @db.Uuid
-  name      String
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  members      UserTeam[]
-  Conversation Conversation[]
-
-  @@unique([companyId, name])
-  @@index([companyId])
-  @@map("teams")
-}
-
-model UserTeam {
-  userId    String   @map("user_id") @db.Uuid
-  teamId    String   @map("team_id") @db.Uuid
-  companyId String   @map("company_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at")
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@id([userId, teamId])
-  @@index([companyId])
-  @@map("user_teams")
-}
-
-model LeadAssignmentRule {
-  id           String             @id @default(uuid()) @db.Uuid
-  companyId    String             @map("company_id") @db.Uuid
-  name         String
-  description  String?
-  priority     Int
-  enabled      Boolean            @default(true)
-  strategy     AssignmentStrategy
-  targetUserId String?            @map("target_user_id") @db.Uuid
-  targetTeamId String?            @map("target_team_id") @db.Uuid
-  cursor       Json? // For round-robin state
-  createdAt    DateTime           @default(now()) @map("created_at")
-  updatedAt    DateTime           @updatedAt @map("updated_at")
-
-  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  assignments LeadAssignment[]
-
-  @@index([companyId, enabled, priority])
-  @@map("lead_assignment_rules")
-}
-
-model LeadAssignment {
-  id             String             @id @default(uuid()) @db.Uuid
-  companyId      String             @map("company_id") @db.Uuid
-  leadId         String             @map("lead_id") @db.Uuid
-  assignedUserId String?            @map("assigned_user_id") @db.Uuid
-  assignedTeamId String?            @map("assigned_team_id") @db.Uuid
-  ruleId         String?            @map("rule_id") @db.Uuid
-  strategy       AssignmentStrategy
-  trigger        AssignmentTrigger
-  status         AssignmentStatus   @default(ASSIGNED)
-  reason         String?
-  assignedAt     DateTime           @default(now()) @map("assigned_at")
-  createdAt      DateTime           @default(now()) @map("created_at")
-
-  company Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  lead    Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  rule    LeadAssignmentRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
-
-  // Avoid inserting duplicates for the exact same lead creation event
-  @@unique([leadId, trigger])
-  @@index([companyId])
-  @@index([assignedUserId])
-  @@map("lead_assignments")
-}
-
 enum IntegrationStatus {
   PENDING
   CONNECTED
   ERROR
   DISCONNECTED
-}
-
-model IntegrationWebhookEvent {
-  id              String        @id @default(uuid()) @db.Uuid
-  provider        String
-  integrationId   String?       @map("integration_id") @db.Uuid
-  externalEventId String        @map("external_event_id")
-  eventType       String        @map("event_type")
-  payload         Json
-  status          WebhookStatus @default(PENDING)
-  errorMessage    String?       @map("error_message")
-  receivedAt      DateTime      @default(now()) @map("received_at")
-  processedAt     DateTime?     @map("processed_at")
-  retryCount      Int           @default(0) @map("retry_count")
-
-  integration Integration? @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, externalEventId])
-  @@index([status])
-  @@index([integrationId])
-  @@map("integration_webhook_events")
 }
 
 enum WebhookStatus {
@@ -1491,101 +1558,4 @@ enum WebhookStatus {
   PROCESSED
   FAILED
   IGNORED
-}
-
-model PlatformMetaConfiguration {
-  id                          String   @id @default(uuid()) @db.Uuid
-  appId                       String
-  encryptedAppSecret          String
-  encryptedWebhookVerifyToken String
-  facebookConfigId            String?
-  instagramConfigId           String?
-  instagramAppId              String?
-  encryptedInstagramAppSecret String?
-  enabled                     Boolean  @default(false)
-  createdAt                   DateTime @default(now()) @map("created_at")
-  updatedAt                   DateTime @updatedAt @map("updated_at")
-
-  @@map("platform_meta_configurations")
-}
-
-model Conversation {
-  id                       String    @id @default(uuid()) @db.Uuid
-  company_id               String    @db.Uuid
-  contact_id               String    @db.Uuid
-  integration_id           String?   @db.Uuid
-  channel                  String
-  external_conversation_id String?
-  status                   String    @default("OPEN")
-  assigned_user_id         String?   @db.Uuid
-  assigned_team_id         String?   @db.Uuid
-  last_message_at          DateTime?
-  created_at               DateTime  @default(now())
-  updated_at               DateTime  @updatedAt
-  metadata                 Json?
-
-  company       Company      @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  contact       Contact      @relation(fields: [contact_id], references: [id], onDelete: Cascade)
-  integration   Integration? @relation(fields: [integration_id], references: [id], onDelete: SetNull)
-  assigned_user User?        @relation("ConversationAssignedUser", fields: [assigned_user_id], references: [id], onDelete: SetNull)
-  assigned_team Team?        @relation(fields: [assigned_team_id], references: [id], onDelete: SetNull)
-
-  participants ConversationParticipant[]
-  messages     Message[]
-
-  @@index([company_id])
-  @@index([contact_id])
-  @@index([integration_id])
-  @@index([assigned_user_id])
-  @@index([assigned_team_id])
-  @@unique([integration_id, external_conversation_id])
-  @@map("conversations")
-}
-
-model ConversationParticipant {
-  id                   String   @id @default(uuid()) @db.Uuid
-  conversation_id      String   @db.Uuid
-  contact_id           String?  @db.Uuid
-  external_identity_id String?
-  role                 String
-  metadata             Json?
-  created_at           DateTime @default(now())
-
-  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  contact      Contact?     @relation(fields: [contact_id], references: [id], onDelete: SetNull)
-
-  @@index([conversation_id])
-  @@index([contact_id])
-  @@map("conversation_participants")
-}
-
-model Message {
-  id                  String   @id @default(uuid()) @db.Uuid
-  company_id          String   @db.Uuid
-  conversation_id     String   @db.Uuid
-  external_message_id String?
-  direction           String
-  sender_type         String
-  sender_user_id      String?  @db.Uuid
-  sender_contact_id   String?  @db.Uuid
-  content             String
-  content_type        String   @default("TEXT")
-  status              String   @default("DELIVERED")
-  error_code          String?
-  error_message       String?
-  metadata            Json?
-  created_at          DateTime @default(now())
-  updated_at          DateTime @updatedAt
-
-  company        Company      @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  conversation   Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  sender_user    User?        @relation("MessageSenderUser", fields: [sender_user_id], references: [id], onDelete: SetNull)
-  sender_contact Contact?     @relation(fields: [sender_contact_id], references: [id], onDelete: SetNull)
-
-  @@index([company_id])
-  @@index([conversation_id])
-  @@index([sender_user_id])
-  @@index([sender_contact_id])
-  @@unique([conversation_id, external_message_id])
-  @@map("messages")
 }
