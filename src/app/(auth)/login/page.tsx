@@ -46,13 +46,34 @@ function LoginForm() {
   const [isForgotLoading, setIsForgotLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log("========== LOGIN SUBMIT DEBUG ==========");
+
+    console.log("[LOGIN CLIENT] window.location:", {
+      href: window.location.href,
+      origin: window.location.origin,
+      host: window.location.host,
+      protocol: window.location.protocol,
+    });
+
+    console.log("[LOGIN CLIENT] API URL:", "/api/auth/login");
+
+    console.log("=========================================");
     e.preventDefault();
     setIsLoading(true);
 
     try {
+      console.log("[LOGIN CLIENT] CALLING:", {
+        url: "/api/auth/login",
+        origin: window.location.origin,
+      });
       const data = await apiClient.post("/api/auth/login", { email, password });
-
-      setAuth(data.user, data.token);
+      console.log("[LOGIN CLIENT] LOGIN RESPONSE RECEIVED:", {
+        hasData: !!data,
+        hasUser: !!data?.user,
+        hasToken: !!data?.token,
+        role: data?.user?.role,
+      });
+      setAuth(data.user, null);
 
       let dest = searchParams.get("redirect");
       if (!dest || dest === "/") {

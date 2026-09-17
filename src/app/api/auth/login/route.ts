@@ -6,6 +6,37 @@ import { mergePermissionsForRole, getDefaultPermissionsForRole } from "@/lib/per
 import { MAX_CONCURRENT_USERS, getActiveUserCount, isUserCurrentlyActive, touchSession } from "@/lib/session-limit";
 
 export async function POST(request: Request) {
+  console.log("========== LOGIN REQUEST DEBUG ==========");
+
+  console.log("[LOGIN] request.url:", request.url);
+
+  console.log("[LOGIN] headers:", {
+    host: request.headers.get("host"),
+    origin: request.headers.get("origin"),
+    referer: request.headers.get("referer"),
+
+    forwardedHost: request.headers.get("x-forwarded-host"),
+    forwardedProto: request.headers.get("x-forwarded-proto"),
+    forwardedFor: request.headers.get("x-forwarded-for"),
+
+    cfConnectingIp: request.headers.get("cf-connecting-ip"),
+    cfVisitor: request.headers.get("cf-visitor"),
+    cfRay: request.headers.get("cf-ray"),
+
+    userAgent: request.headers.get("user-agent"),
+  });
+
+  const loginRequestUrl = new URL(request.url);
+
+  console.log("[LOGIN] parsed URL:", {
+    protocol: loginRequestUrl.protocol,
+    hostname: loginRequestUrl.hostname,
+    host: loginRequestUrl.host,
+    origin: loginRequestUrl.origin,
+    pathname: loginRequestUrl.pathname,
+  });
+
+  console.log("=========================================");
   const ip = getIpFromRequest(request);
 
   try {
@@ -24,20 +55,20 @@ export async function POST(request: Request) {
 
     try {
       const result = await loginUser(email, password);
-      user  = result.user;
+      user = result.user;
       token = result.token;
       refreshToken = result.refreshToken;
     } catch (loginErr) {
       // Log failed login attempt
       await logAuditEvent({
-        action:    "LOGIN_FAILED",
-        category:  "Authentication",
-        severity:  "WARNING",
-        actorName:  email,
+        action: "LOGIN_FAILED",
+        category: "Authentication",
+        severity: "WARNING",
+        actorName: email,
         actorEmail: email,
-        actorRole:  "UNKNOWN",
+        actorRole: "UNKNOWN",
         targetName: "Login Portal",
-        summary:   `Failed login attempt for ${email}`,
+        summary: `Failed login attempt for ${email}`,
         ipAddress: ip,
       });
       const message = loginErr instanceof Error ? loginErr.message : "Login failed";
@@ -51,14 +82,14 @@ export async function POST(request: Request) {
       const activeCount = await getActiveUserCount();
       if (activeCount >= MAX_CONCURRENT_USERS) {
         await logAuditEvent({
-          action:    "LOGIN_REJECTED_CAPACITY",
-          category:  "Authentication",
-          severity:  "WARNING",
-          actorName:  user.name || email,
+          action: "LOGIN_REJECTED_CAPACITY",
+          category: "Authentication",
+          severity: "WARNING",
+          actorName: user.name || email,
           actorEmail: email,
-          actorRole:  user.role,
+          actorRole: user.role,
           targetName: "Login Portal",
-          summary:   `Login rejected — server at capacity (${MAX_CONCURRENT_USERS} concurrent users)`,
+          summary: `Login rejected — server at capacity (${MAX_CONCURRENT_USERS} concurrent users)`,
           ipAddress: ip,
         });
         return NextResponse.json(
@@ -132,20 +163,25 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json({
       user: {
-        id:         user.id,
-        email:      user.email,
-        name:       user.name,
-        role:       user.role,
-        status:     userRecord?.status || user.status || "ACTIVE",
-        isActive:   userRecord?.isActive ?? user.isActive ?? true,
-        isOwner:    isOwner,
-        company:    resolvedCompany,
-        companyId:  companyIdVal,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        status: userRecord?.status || user.status || "ACTIVE",
+        isActive: userRecord?.isActive ?? user.isActive ?? true,
+        isOwner: isOwner,
+        company: resolvedCompany,
+        companyId: companyIdVal,
         department: isSuper ? "" : (user.department || resolvedCompany),
-        category:   categoryVal,
-        planName:   planName,
-        phone:      userRecord?.phone || user.phone || "",
+        category: categoryVal,
+        planName: planName,
+        phone: userRecord?.phone || user.phone || "",
       }
+    });
+    console.log("[LOGIN] COOKIE ENV:", {
+      nodeEnv: process.env.NODE_ENV,
+      secureCookie: process.env.NODE_ENV === "production",
+      requestUrl: request.url,
     });
 
     // Set token as httpOnly cookie
@@ -171,6 +207,14 @@ export async function POST(request: Request) {
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: "/",
     });
+    console.log("[LOGIN] cookies configured:", {
+      accessTokenCookie: true,
+      refreshTokenCookie: true,
+      sameSite: "lax",
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+    });
 
     // Cosmetic only — read by the sidebar to render the menu before its own permissions
     // fetch resolves. NOT used for authorization; middleware trusts payload.permissions
@@ -186,14 +230,14 @@ export async function POST(request: Request) {
 
     // Log successful login
     await logAuditEvent({
-      action:    "USER_LOGIN",
-      category:  "Authentication",
-      severity:  "INFO",
-      actorName:  user.name || user.email,
+      action: "USER_LOGIN",
+      category: "Authentication",
+      severity: "INFO",
+      actorName: user.name || user.email,
       actorEmail: user.email,
-      actorRole:  user.role,
+      actorRole: user.role,
       targetName: "Dashboard",
-      summary:   `${user.name || user.email} logged into the system`,
+      summary: `${user.name || user.email} logged into the system`,
       ipAddress: ip,
     });
 
