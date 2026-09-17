@@ -64,6 +64,14 @@ function getSuperAdminMenu(): MenuSection[] {
         { label: "Usage", href: "/admin/usage" },
         { label: "Billing", href: "/admin/billing" },
         { label: "Audit Logs", href: "/admin/audit-logs" },
+        { label: "Meta Integration", href: "/admin/integrations/meta" },
+      ],
+    },
+    {
+      label: "USER MANAGEMENT",
+      icon: <IconUsers size={18} />,
+      items: [
+        { label: "User Management", href: "/admin/user-management" },
       ],
     },
     {
@@ -80,31 +88,49 @@ function getSuperAdminMenu(): MenuSection[] {
 function getAdminMenu(): MenuSection[] {
   return [
     {
-      label: "LEADS",
-      icon: <IconAddressBook size={18} />,
+      label: "LEADS & CONTACTS",
+      icon: <IconAddressBook size={18} />, // Existing
       items: [
-        { label: "Leads CRM", href: "/leads/crm" },
+        { label: "Leads", href: "/leads/crm" },
+        { label: "Contacts", href: "/contacts" },
       ],
     },
     {
-      label: "USER MANAGEMENT",
-      icon: <IconUsers size={18} />,
+      label: "ACQUISITION",
+      icon: <IconChartBar size={18} />, // Existing
       items: [
-        { label: "User Management", href: "/admin/user-management" },
+        { label: "Integrations", href: "/settings/integrations" },
+        { label: "Attribution", href: "/attribution" },
       ],
     },
-    // {
-    //   label: "ARCHIVE",
-    //   icon: <IconArchive size={18} />,
-    //   items: [
-    //     { label: "Archive", href: "/admin/archive" },
-    //   ],
-    // },
+    {
+      label: "AUTOMATION",
+      icon: <IconRobot size={18} />, // Existing
+      items: [
+        { label: "Assignment Rules", href: "/settings/assignment-rules" },
+      ],
+    },
+    {
+      label: "ORGANIZATION",
+      icon: <IconUsers size={18} />, // Existing
+      items: [
+        { label: "Users", href: "/admin/user-management" },
+        { label: "Teams", href: "/settings/team" },
+        { label: "Subscription", href: "/settings/subscription" },
+      ],
+    },
+    {
+      label: "INBOX",
+      icon: <IconMessage size={18} />, // New Inbox Section
+      items: [
+        { label: "Inbox", href: "/inbox" },
+      ],
+    },
     {
       label: "SETTINGS",
-      icon: <IconSettings size={18} />,
+      icon: <IconSettings size={18} />, // Existing
       items: [
-        { label: "Subscription", href: "/settings/subscription" },
+        { label: "My Profile", href: "/settings/profile" },
       ],
     },
   ];
@@ -113,76 +139,18 @@ function getAdminMenu(): MenuSection[] {
 function getUserMenu(): MenuSection[] {
   return [
     {
-      label: "TEAM",
-      icon: <IconBuildingCommunity size={18} />,
-      items: [
-        { label: "Daily Reports", href: "/team/daily-reports" },
-        { label: "Sales Team Reports", href: "/team/sales-team-reports" },
-        { label: "Knowledge Base", href: "/team/knowledge-base" },
-      ],
-    },
-    {
-      label: "LEADS",
+      label: "LEADS \u0026 CONTACTS",
       icon: <IconAddressBook size={18} />,
       items: [
         { label: "My Leads", href: "/leads/crm" },
+        { label: "Contacts", href: "/contacts" },
       ],
     },
     {
-      label: "SALES",
-      icon: <IconChartBar size={18} />,
+      label: "INBOX",
+      icon: <IconMessage size={18} />,
       items: [
-        { label: "My Pipeline", href: "/sales/pipeline" },
-        { label: "My Deals", href: "/sales/crm" },
-        { label: "My Metrics", href: "/sales/metrics" },
-
-      ],
-    },
-    {
-      label: "OFFER",
-      icon: <IconGift size={18} />,
-      items: [
-        { label: "Browse Offers", href: "/offer/creation" },
-        { label: "Revenue Generator", href: "/offer/revenue-generator" },
-        { label: "Ideas Backlog", href: "/offer/ideas-backlog" },
-      ],
-    },
-    {
-      label: "DOCUMENTS",
-      icon: <IconFileText size={18} />,
-      items: [
-        { label: "Proposals", href: "/documents/proposals" },
-        { label: "Contracts", href: "/documents/contracts" },
-        { label: "Invoices", href: "/documents/invoices" },
-        { label: "Templates", href: "/documents/templates" },
-      ],
-    },
-    {
-      label: "FINANCES",
-      icon: <IconCash size={18} />,
-      items: [
-        { label: "Financial Dashboard", href: "/finances/dashboard" },
-        { label: "Cash In", href: "/finances/cash-in" },
-        { label: "Cash Out", href: "/finances/cash-out" },
-        { label: "Receivables", href: "/finances/receivables" },
-      ],
-    },
-    {
-      label: "OPERATIONS",
-      icon: <IconCheckbox size={18} />,
-      items: [
-        { label: "Onboarding", href: "/operations/onboarding" },
-        { label: "Project Management", href: "/operations/fulfillment" },
-        { label: "Custom Reports", href: "/operations/custom-reports" },
-      ],
-    },
-    {
-      label: "AI & AUTOMATION",
-      icon: <IconRobot size={18} />,
-      items: [
-        { label: "AI Content Companion", href: "/ai-tools/content-companion" },
-        { label: "Email Assistant", href: "/ai-tools/email-assistant" },
-        { label: "Lead Scoring", href: "/ai-tools/lead-scoring" },
+        { label: "Inbox", href: "/inbox" },
       ],
     },
     {
@@ -262,17 +230,29 @@ export function Sidebar({
           }
 
           const dbAccess = activePermissions[item.href];
-          const pageAccess = dbAccess !== undefined ? dbAccess : DEFAULT_PERMISSIONS[item.href];
+          const pageAccess =
+            dbAccess !== undefined
+              ? dbAccess
+              : DEFAULT_PERMISSIONS[item.href];
 
-          if (pageAccess !== undefined && pageAccess !== null) {
-            if (typeof pageAccess === "boolean") {
-              // Cookie format: { "/path": true }
-              return pageAccess;
-            }
-            // API format: { "/path": { "ADMIN": true } }
-            return pageAccess[role] === true;
+          if (pageAccess === undefined || pageAccess === null) {
+            return role === "SUPER_ADMIN";
           }
-          // If no permission rule exists, default to false for non-superadmins
+
+          if (typeof pageAccess === "boolean") {
+            // Cookie format:
+            // { "/path": true }
+            return pageAccess;
+          }
+
+          if (typeof pageAccess === "object") {
+            // API format:
+            // { "/path": { "ADMIN": true, "USER": true } }
+            return (
+              (pageAccess as Record<string, boolean>)[role] === true
+            );
+          }
+
           return role === "SUPER_ADMIN";
         });
 

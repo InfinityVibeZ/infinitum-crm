@@ -29,6 +29,7 @@ function base64UrlDecodeToString(base64Url: string): string {
 async function verifyJwtEdge(
   token: string,
   secret: string,
+  ignoreExpiration: boolean = false
 ): Promise<any | null> {
   try {
     const parts = token.split(".");
@@ -55,7 +56,7 @@ async function verifyJwtEdge(
     if (!valid) return null;
 
     const payload = JSON.parse(base64UrlDecodeToString(payloadB64));
-    if (typeof payload.exp === "number" && Date.now() >= payload.exp * 1000)
+    if (!ignoreExpiration && typeof payload.exp === "number" && Date.now() >= payload.exp * 1000)
       return null;
 
     return payload;
@@ -72,6 +73,8 @@ export async function middleware(request: NextRequest) {
     "/reset-password",
     "/account/setup",
     "/access-denied",
+    "/privacy",
+    "/data-deletion",
     "/api/auth/login",
     "/api/auth/forgot-password",
     "/api/auth/reset-password",
@@ -80,6 +83,7 @@ export async function middleware(request: NextRequest) {
     "/api/auth/signup",
     "/api/public",
     "/api/cron",
+    "/api/webhooks",
   ];
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route),
@@ -97,23 +101,20 @@ export async function middleware(request: NextRequest) {
 
   // Check for auth token in cookie or Authorization header
   const token =
-    request.cookies.get("nexus-token")?.value ||
+    request.cookies.get("nexus-access-token")?.value ||
+    request.cookies.get("nexus-token")?.value || // Fallback for transition
     request.headers.get("Authorization")?.replace("Bearer ", "");
 
-  // If visiting the root, redirect authenticated users to their dashboard,
-  // otherwise show the public landing page.
+  const hasRefreshToken = !!request.cookies.get("nexus-refresh-token")?.value;
+
+  // If visiting the root, always show the public landing page (as requested by user).
+  // We no longer redirect authenticated users away from the root.
   if (pathname === "/") {
-    if (token) {
-      const payload = await verifyJwtEdge(token, JWT_SECRET);
-      if (payload) {
-        if (payload.role === "SUPER_ADMIN") {
-          return NextResponse.redirect(new URL("/dashboard", request.url));
-        } else {
-          return NextResponse.redirect(new URL("/leads/metrics", request.url));
-        }
-      }
-    }
-    return NextResponse.next();
+    const nextRes = NextResponse.next();
+    nextRes.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    nextRes.headers.set("Pragma", "no-cache");
+    nextRes.headers.set("Expires", "0");
+    return nextRes;
   }
 
   if (isPublicRoute || isPublicRegistration) {
@@ -131,8 +132,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Verify JWT signature (Edge-compatible) before trusting its role claim for any decision
-  const payload = await verifyJwtEdge(token, JWT_SECRET);
+  // Verify JWT signature (Edge-compatible) before trusting its role claim for any decision.
+  // If the access token is expired but a refresh token exists, we allow the page router to proceed
+  // so the client-side Global401Interceptor can seamlessly catch the 401 from data fetches and refresh it.
+  const payload = await verifyJwtEdge(token, JWT_SECRET, hasRefreshToken);
   if (!payload) {
     const response = pathname.startsWith("/api")
       ? NextResponse.json({ error: "Invalid token" }, { status: 401 })

@@ -10,7 +10,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const cookieStore = await cookies();
-  const token = cookieStore.get("nexus-token")?.value;
+  const token = cookieStore.get("nexus-access-token")?.value;
   let userRole = "USER";
 
   if (token) {

@@ -115,18 +115,38 @@ export async function loginUser(email: string, password: string) {
   });
 
   // Generate JWT
-  const token = generateToken({
+  const payload = {
     userId: user.id,
     email: user.email,
     role: user.role,
     name: user.name || user.email,
+  };
+  const token = generateAccessToken(payload);
+  const refreshToken = generateRefreshToken(payload);
+  const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+
+  await prisma.session.create({
+    data: {
+      userId: user.id,
+      refreshTokenHash,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+    },
   });
 
-  return { user: updatedUser, token };
+  return { user: updatedUser, token, refreshToken };
 }
 
 export function generateToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+  return generateAccessToken(payload);
+}
+
+export function generateAccessToken(payload: JWTPayload): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "15m" });
+}
+
+export function generateRefreshToken(payload: JWTPayload): string {
+  const randomJti = crypto.randomUUID();
+  return jwt.sign({ ...payload, jti: randomJti }, JWT_SECRET, { expiresIn: "7d" });
 }
 
 export function verifyToken(token: string): JWTPayload {
@@ -137,7 +157,10 @@ export function verifyToken(token: string): JWTPayload {
 export function extractTokenFromRequest(request: Request): string | null {
   const authHeader = request.headers.get("Authorization");
   if (authHeader?.startsWith("Bearer ")) {
-    return authHeader.substring(7);
+    const token = authHeader.substring(7);
+    if (token !== "null" && token !== "undefined" && token !== "") {
+      return token;
+    }
   }
 
   // Parse cookies from headers
@@ -149,6 +172,9 @@ export function extractTokenFromRequest(request: Request): string | null {
         return [k, decodeURIComponent(v)];
       })
     );
+    if (cookies["nexus-access-token"]) {
+      return cookies["nexus-access-token"];
+    }
     if (cookies["nexus-token"]) {
       return cookies["nexus-token"];
     }

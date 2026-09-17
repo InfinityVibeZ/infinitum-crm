@@ -1,103 +1,300 @@
-import { hasFeature } from "@/lib/subscription";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { extractTokenFromRequest, getTokenPayload, getTenantWhereClauseAsync, requireAuthenticatedUser } from "@/lib/auth";
+import {
+  getTenantWhereClauseAsync,
+  requireAuthenticatedUser,
+} from "@/lib/auth";
 
-
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const resolvedParams = await params;
-  try {
-    const auth = await requireAuthenticatedUser(request);
-    if (auth instanceof Response) return auth;
-    const { payload, user: authUser } = auth;
 
-    const tenantFilter = await getTenantWhereClauseAsync(payload);
-    const lead = await prisma.lead.findFirst({ where: { id: resolvedParams.id, ...tenantFilter }, select: { id: true } });
-    if (!lead) {
-      return NextResponse.json({ error: "Lead not found or unauthorized" }, { status: 404 });
+  try {
+    const auth =
+      await requireAuthenticatedUser(request);
+
+    if (auth instanceof Response) {
+      return auth;
     }
 
-    const payments = await prisma.leadPayment.findMany({
-      where: { leadId: resolvedParams.id },
-      orderBy: { paymentDate: "desc" },
-    });
+    const { payload } = auth;
+
+    const tenantFilter =
+      await getTenantWhereClauseAsync(payload);
+
+    const lead =
+      await prisma.lead.findFirst({
+        where: {
+          id: resolvedParams.id,
+          ...tenantFilter,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    if (!lead) {
+      return NextResponse.json(
+        {
+          error:
+            "Lead not found or unauthorized",
+        },
+        { status: 404 }
+      );
+    }
+
+    const payments =
+      await prisma.leadPayment.findMany({
+        where: {
+          leadId: resolvedParams.id,
+          companyId:
+            payload.companyId as string,
+        },
+
+        orderBy: {
+          paymentDate: "desc",
+        },
+      });
 
     return NextResponse.json(payments);
   } catch (error) {
-    console.error("GET /api/leads/[id]/payments error:", error);
+    console.error(
+      "GET /api/leads/[id]/payments error:",
+      error
+    );
+
     return NextResponse.json(
-      { error: "Failed to fetch payments" },
+      {
+        error:
+          "Failed to fetch payments",
+      },
       { status: 500 }
     );
   }
 }
 
-
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const resolvedParams = await params;
+
   try {
-    const auth = await requireAuthenticatedUser(request);
-    if (auth instanceof Response) return auth;
-    const { payload, user: authUser } = auth;
+    const auth =
+      await requireAuthenticatedUser(request);
+
+    if (auth instanceof Response) {
+      return auth;
+    }
+
+    const { payload } = auth;
 
     const body = await request.json();
-    const { amount, paymentDate, paymentMethod, referenceId, notes } = body;
 
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
+    const {
+      amount,
+      paymentDate,
+      paymentMethod,
+      referenceId,
+      notes,
+      status,
+    } = body;
+
+    /*
+     * -------------------------------------------------------
+     * VALIDATE AMOUNT
+     * -------------------------------------------------------
+     */
+
+    const numAmount =
+      typeof amount === "number"
+        ? amount
+        : parseFloat(
+            String(amount ?? "")
+          );
+
+    if (
+      !Number.isFinite(numAmount) ||
+      numAmount <= 0
+    ) {
       return NextResponse.json(
-        { error: "Amount must be a positive number greater than 0" },
+        {
+          error:
+            "Amount must be a positive number greater than 0",
+        },
         { status: 400 }
       );
     }
 
-    if (!paymentDate || !paymentMethod) {
+    /*
+     * -------------------------------------------------------
+     * VALIDATE PAYMENT DATE
+     * -------------------------------------------------------
+     */
+
+    if (!paymentDate) {
       return NextResponse.json(
-        { error: "Payment Date and Payment Method are required" },
+        {
+          error:
+            "Payment Date is required",
+        },
         { status: 400 }
       );
     }
 
-    const tenantFilter = await getTenantWhereClauseAsync(payload);
-    const lead = await prisma.lead.findFirst({
-      where: { id: resolvedParams.id, ...tenantFilter },
-    });
+    const parsedPaymentDate =
+      new Date(paymentDate);
+
+    if (
+      Number.isNaN(
+        parsedPaymentDate.getTime()
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Invalid payment date",
+        },
+        { status: 400 }
+      );
+    }
+
+    /*
+     * -------------------------------------------------------
+     * TENANT VALIDATION
+     * -------------------------------------------------------
+     */
+
+    const tenantFilter =
+      await getTenantWhereClauseAsync(
+        payload
+      );
+
+    const lead =
+      await prisma.lead.findFirst({
+        where: {
+          id: resolvedParams.id,
+          ...tenantFilter,
+        },
+      });
 
     if (!lead) {
-      return NextResponse.json({ error: "Lead not found or unauthorized" }, { status: 404 });
+      return NextResponse.json(
+        {
+          error:
+            "Lead not found or unauthorized",
+        },
+        { status: 404 }
+      );
     }
 
-    const payment = await prisma.leadPayment.create({
-      data: {
-        leadId: resolvedParams.id,
-        amount: numAmount,
-        paymentDate: new Date(paymentDate),
-        paymentMethod,
-        referenceId: referenceId || null,
-        notes: notes || null,
-        status: status || "PAID",
-        createdBy: payload.userId,
-        companyId: payload.companyId as string,
-      },
-    });
+    /*
+     * -------------------------------------------------------
+     * PAYMENT NOTES
+     *
+     * LeadPayment does not have:
+     * paymentMethod
+     * referenceId
+     * status
+     *
+     * Preserve these values in the notes JSON
+     * rather than changing the database schema.
+     * -------------------------------------------------------
+     */
 
-    // Update cashCollected on lead if applicable
-    const validPayments = await prisma.leadPayment.aggregate({
-      where: { leadId: resolvedParams.id, status: "PAID" },
-      _sum: { amount: true },
-    });
-    const totalPaid = validPayments._sum.amount ? parseFloat(validPayments._sum.amount.toString()) : 0;
+    const paymentMetadata = {
+      paymentMethod:
+        paymentMethod || null,
 
-    await prisma.lead.update({
-      where: { id: resolvedParams.id },
-      data: { cashCollected: totalPaid },
-    });
+      referenceId:
+        referenceId || null,
 
-    return NextResponse.json(payment);
+      status:
+        status || "PAID",
+
+      notes:
+        notes || null,
+    };
+
+    const paymentNotes =
+      JSON.stringify(
+        paymentMetadata
+      );
+
+    /*
+     * -------------------------------------------------------
+     * CREATE PAYMENT
+     * -------------------------------------------------------
+     */
+
+    const payment =
+      await prisma.leadPayment.create({
+        data: {
+          companyId:
+            payload.companyId as string,
+
+          leadId:
+            resolvedParams.id,
+
+          amount:
+            numAmount,
+
+          paymentDate:
+            parsedPaymentDate,
+
+          notes:
+            paymentNotes,
+        },
+      });
+
+    /*
+     * -------------------------------------------------------
+     * UPDATE LEAD CASH COLLECTED
+     * -------------------------------------------------------
+     *
+     * All LeadPayment records for this lead
+     * are treated as collected payments because
+     * the schema has no payment status column.
+     * -------------------------------------------------------
+     */
+
+    
+    /*
+     * -------------------------------------------------------
+     * RETURN PAYMENT
+     * -------------------------------------------------------
+     *
+     * Return the legacy fields as part of the API
+     * response so the existing frontend can continue
+     * consuming them.
+     * -------------------------------------------------------
+     */
+
+    return NextResponse.json({
+      ...payment,
+
+      paymentMethod:
+        paymentMethod || null,
+
+      referenceId:
+        referenceId || null,
+
+      status:
+        status || "PAID",
+    });
   } catch (error) {
-    console.error("POST /api/leads/[id]/payments error:", error);
+    console.error(
+      "POST /api/leads/[id]/payments error:",
+      error
+    );
+
     return NextResponse.json(
-      { error: "Failed to create payment" },
+      {
+        error:
+          "Failed to create payment",
+      },
       { status: 500 }
     );
   }

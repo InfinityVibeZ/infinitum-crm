@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractTokenFromRequest, getTokenPayload, requireRole, requireAuthenticatedUser } from "@/lib/auth";
 import { createAccountSetupToken } from "@/lib/tokens";
+import bcrypt from "bcryptjs";
 import { sendAdminInvitationEmail, sendUserInvitationEmail } from "@/lib/mail";
 import { logAuditEvent } from "@/lib/audit";
 
@@ -28,7 +29,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Rate limit: prevent double-click/spam resends from generating a flood of tokens/emails
     const RATE_LIMIT_WINDOW_MS = 60 * 1000;
     const lastInvitation = await prisma.invitationToken.findFirst({
-      where: { userId: targetUserId, purpose: "ACCOUNT_SETUP" },
+      where: { userId: targetUserId },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
     });
@@ -75,6 +76,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     // 2. Dispatch email based on role
     let mailResult: { success: boolean; setupUrl: string; error?: any };
+    
+    // Generate new temporary password and update user
+    const newTempPassword = Math.random().toString(36).slice(-8);
+    const hashedPassword = await bcrypt.hash(newTempPassword, 12);
+    await prisma.user.update({ where: { id: targetUser.id }, data: { passwordHash: hashedPassword } });
+
     if (targetUser.role === "ADMIN" || targetUser.role === "SUPER_ADMIN") {
       mailResult = await sendAdminInvitationEmail({
         adminName: targetUser.name,
@@ -82,6 +89,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         companyName: targetCompanyName,
         rawToken,
         baseUrl,
+        temporaryPassword: newTempPassword,
       });
     } else {
       mailResult = await sendUserInvitationEmail({
@@ -90,6 +98,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         companyName: targetCompanyName,
         rawToken,
         baseUrl,
+        temporaryPassword: newTempPassword,
       });
     }
 
@@ -121,6 +130,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
   } catch (error) {
     console.error("POST /api/users/[id]/resend-invitation error:", error);
-    return NextResponse.json({ error: "Failed to resend invitation" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to resend invitation", details: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }

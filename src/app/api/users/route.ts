@@ -169,7 +169,7 @@ export async function GET(request: Request) {
       >();
       const now = new Date();
       for (const t of invitationTokens) {
-        if (!latestTokenByUser.has(t.userId)) {
+        if (t.userId && !latestTokenByUser.has(t.userId)) {
           latestTokenByUser.set(t.userId, t);
         }
       }
@@ -295,7 +295,7 @@ export async function GET(request: Request) {
         { expiresAt: Date }
       >();
       for (const t of invitationTokens) {
-        if (!latestTokenByUser.has(t.userId)) {
+        if (t.userId && !latestTokenByUser.has(t.userId)) {
           latestTokenByUser.set(t.userId, t);
         }
       }
@@ -387,7 +387,10 @@ export async function GET(request: Request) {
       { expiresAt: Date }
     >();
     const now = new Date();
+
     for (const t of invitationTokens) {
+      if (!t.userId) continue;
+
       if (!latestTokenByUser.has(t.userId)) {
         latestTokenByUser.set(t.userId, t);
       }
@@ -550,7 +553,7 @@ export async function POST(request: Request) {
     if (!isPublicRegistration && (assignedRole === "ADMIN" || assignedRole === "SUPER_ADMIN") && resolvedCompanyId) {
       const entitlements = await getEffectiveEntitlements(resolvedCompanyId);
       const maxAdminsFeature = entitlements.get("MAX_ADMINS");
-      
+
       if (maxAdminsFeature && maxAdminsFeature.limitValue !== null) {
         // Count existing admins (including pending ones, but ignoring deleted ones)
         const currentAdminCount = await prisma.user.count({
@@ -560,7 +563,7 @@ export async function POST(request: Request) {
             isDeleted: false,
           }
         });
-        
+
         if (currentAdminCount >= Number(maxAdminsFeature.limitValue)) {
           return NextResponse.json(
             { error: `You have reached the maximum number of admins (${maxAdminsFeature.limitValue}) allowed on your current plan.` },
@@ -632,6 +635,7 @@ export async function POST(request: Request) {
         companyName: targetCompanyName,
         rawToken,
         baseUrl,
+        temporaryPassword: initialTempPassword,
       });
       await logAuditEvent({
         action: "ADMIN_CREATED",
@@ -640,7 +644,7 @@ export async function POST(request: Request) {
         actorName:
           payload?.name ||
           (isPublicRegistration ? "Public registration" : "Unknown"),
-        actorEmail: payload?.email,
+        actorEmail: payload?.email || "system@localhost",
         actorRole: payload?.role || "PUBLIC",
         targetName: `${name} (${email})`,
         summary: `Created Admin account for ${targetCompanyName} and sent invitation link`,
@@ -652,6 +656,7 @@ export async function POST(request: Request) {
         companyName: targetCompanyName,
         rawToken,
         baseUrl,
+        temporaryPassword: initialTempPassword,
       });
       await logAuditEvent({
         action: "USER_CREATED",
@@ -660,7 +665,7 @@ export async function POST(request: Request) {
         actorName:
           payload?.name ||
           (isPublicRegistration ? "Public registration" : "Unknown"),
-        actorEmail: payload?.email,
+        actorEmail: payload?.email || "system@localhost",
         actorRole: payload?.role || "PUBLIC",
         targetName: `${name} (${email})`,
         summary: `Created User account for ${targetCompanyName} and sent invitation link`,

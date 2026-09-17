@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { IconBuildingSkyscraper, IconLoader2, IconAlertCircle, IconCheck, IconEye, IconEyeOff } from "@tabler/icons-react";
+import toast from "react-hot-toast";
 import { apiClient } from "@/lib/apiClient";
 import { getPriceDisplayInfo } from "@/lib/pricing";
 
@@ -20,7 +21,7 @@ function SignupForm() {
   const [plans, setPlans] = useState<any[]>([]);
   const [selectedPlanCode, setSelectedPlanCode] = useState("");
 
-  const [error, setError] = useState("");
+
   const [isLoading, setIsLoading] = useState(false);
   const [fetchingPlans, setFetchingPlans] = useState(true);
   const hasFetched = React.useRef(false);
@@ -57,10 +58,9 @@ function SignupForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
 
     if (!name.trim() || !email.trim() || !password || !companyName.trim()) {
-      setError("All fields are required.");
+      toast.error("All fields are required.");
       return;
     }
 
@@ -88,7 +88,7 @@ function SignupForm() {
         router.push("/login");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create account");
+      toast.error(err instanceof Error ? err.message : "Failed to create account");
       setIsLoading(false);
     }
   };
@@ -109,12 +109,7 @@ function SignupForm() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-xs font-semibold text-red-400 flex items-center gap-2">
-              <IconAlertCircle size={16} className="shrink-0" />
-              {error}
-            </div>
-          )}
+
 
           <div className="space-y-4">
             <div>

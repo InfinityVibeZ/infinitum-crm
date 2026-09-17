@@ -1,50 +1,87 @@
 import crypto from "crypto";
+import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import type { Role } from "@prisma/client";
 
 /**
- * Helper to safely resolve the InvitationToken Prisma model accessor
+ * Helper to safely resolve the InvitationToken Prisma model accessor.
+ *
+ * This is retained for compatibility with the existing invitation
+ * implementation.
  */
 function getInvitationTokenModel() {
   const p = prisma as any;
-  if (p.invitationToken || p.InvitationToken) {
-    return p.invitationToken || p.InvitationToken;
+
+  if (
+    p.invitationToken ||
+    p.InvitationToken
+  ) {
+    return (
+      p.invitationToken ||
+      p.InvitationToken
+    );
   }
+
   try {
-    const { PrismaClient } = require("@prisma/client");
-    const fresh = new PrismaClient();
-    return (fresh as any).invitationToken || (fresh as any).InvitationToken || null;
+    const {
+      PrismaClient,
+    } = require("@prisma/client");
+
+    const fresh =
+      new PrismaClient();
+
+    return (
+      (fresh as any)
+        .invitationToken ||
+      (fresh as any)
+        .InvitationToken ||
+      null
+    );
   } catch (_) {
     return null;
   }
 }
 
 /**
- * Helper to safely resolve the PasswordResetToken Prisma model accessor (if existing)
+ * Helper to safely resolve PasswordResetToken.
  */
 function getPasswordResetTokenModel() {
   const p = prisma as any;
-  return p.passwordResetToken || p.PasswordResetToken || null;
+
+  return (
+    p.passwordResetToken ||
+    p.PasswordResetToken ||
+    null
+  );
 }
 
 /**
- * Generate a cryptographically secure 64-character random token string (32 bytes hex)
+ * Generate a cryptographically secure
+ * 64-character random token.
+ *
+ * 32 bytes = 64 hexadecimal characters.
  */
 export function generateRawToken(): string {
-  return crypto.randomBytes(32).toString("hex");
+  return crypto
+    .randomBytes(32)
+    .toString("hex");
 }
 
 /**
- * Calculate SHA-256 hash of a raw token for secure database storage/lookup
+ * SHA-256 hash a raw token before database storage.
  */
-export function hashToken(rawToken: string): string {
-  return crypto.createHash("sha256").update(rawToken).digest("hex");
+export function hashToken(
+  rawToken: string
+): string {
+  return crypto
+    .createHash("sha256")
+    .update(rawToken)
+    .digest("hex");
 }
 
 /**
- * Issue a new ACCOUNT_SETUP invitation token for an Admin or User.
- * Revokes any existing PENDING invitations for this user to prevent state conflicts.
- * Expiration: 24 Hours.
+ * Issue a new ACCOUNT_SETUP invitation token.
+ *
+ * Expiration: 24 hours.
  */
 export async function createAccountSetupToken({
   userId,
@@ -57,216 +94,438 @@ export async function createAccountSetupToken({
   role: Role;
   createdBy?: string | null;
 }) {
-  const rawToken = generateRawToken();
-  const tokenHash = hashToken(rawToken);
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  /*
+   * Keep these arguments for compatibility with
+   * existing callers.
+   */
+  void role;
+  void createdBy;
 
-  const model = getInvitationTokenModel();
+  const rawToken =
+    generateRawToken();
+
+  const tokenHash =
+    hashToken(rawToken);
+
+  const expiresAt =
+    new Date(
+      Date.now() +
+        24 * 60 * 60 * 1000
+    );
+
+  const model =
+    getInvitationTokenModel();
 
   if (model) {
     try {
-      // Revoke any previous PENDING setup invitations for this user
-      await model.updateMany({
+      /*
+       * Remove previous invitation/setup
+       * records for this user.
+       */
+      await model.deleteMany({
         where: {
           userId,
-          purpose: "ACCOUNT_SETUP",
-          status: "PENDING",
-        },
-        data: {
-          status: "REVOKED",
         },
       });
     } catch (e) {
-      console.warn("[createAccountSetupToken] Revoke warning:", e);
+      console.warn(
+        "[createAccountSetupToken] Delete warning:",
+        e
+      );
     }
 
     try {
-      // Store token hash in DB
-      const tokenRecord = await model.create({
-        data: {
-          tokenHash,
-          userId,
-          companyId: companyId || undefined,
-          role,
-          purpose: "ACCOUNT_SETUP",
-          status: "PENDING",
-          expiresAt,
-          createdBy,
-        },
-      });
-      return { rawToken, tokenRecord };
+      const user =
+        await prisma.user.findUnique({
+          where: {
+            id: userId,
+          },
+          select: {
+            email: true,
+          },
+        });
+
+      if (!user) {
+        throw new Error(
+          "User not found"
+        );
+      }
+
+      const tokenRecord =
+        await model.create({
+          data: {
+            tokenHash,
+            email: user.email,
+            userId,
+            companyId:
+              companyId ||
+              undefined,
+            expiresAt,
+          },
+        });
+
+      return {
+        rawToken,
+        tokenRecord,
+      };
     } catch (e) {
-      console.warn("[createAccountSetupToken] Create warning:", e);
+      console.error(
+        "[createAccountSetupToken] Create error:",
+        e
+      );
+
+      throw e;
     }
   }
 
-  return { rawToken, tokenRecord: null };
+  return {
+    rawToken,
+    tokenRecord: null,
+  };
 }
 
 /**
- * Issue a new PASSWORD_RESET token for an Active user.
- * Revokes any existing PENDING password reset tokens for this user.
- * Expiration: 24 Hours (matches ACCOUNT_SETUP for a consistent link-lifetime/messaging experience).
+ * Issue a new PASSWORD_RESET token.
+ *
+ * Existing reset tokens for the user are removed.
+ *
+ * Expiration: 30 minutes.
  */
 export async function createPasswordResetToken({
   userId,
-  companyId,
-  role,
 }: {
   userId: string;
-  companyId?: string | null;
-  role: Role;
 }) {
-  const rawToken = generateRawToken();
-  const tokenHash = hashToken(rawToken);
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  const rawToken =
+    generateRawToken();
 
-  const model = getInvitationTokenModel();
+  const tokenHash =
+    hashToken(rawToken);
 
-  if (model) {
-    try {
-      // Revoke any previous PENDING reset tokens for this user
-      await model.updateMany({
+  const expiresAt =
+    new Date(
+      Date.now() +
+        30 * 60 * 1000
+    );
+
+  /*
+   * Delete previous reset tokens.
+   */
+  try {
+    await prisma.passwordResetToken.deleteMany(
+      {
         where: {
-          userId,
-          purpose: "PASSWORD_RESET",
-          status: "PENDING",
+          user_id: userId,
         },
-        data: {
-          status: "REVOKED",
-        },
-      });
-    } catch (e) {
-      console.warn("[createPasswordResetToken] Revoke warning:", e);
-    }
-
-    const resetModel = getPasswordResetTokenModel();
-    if (resetModel) {
-      try {
-        const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
-        if (user?.email) {
-          await resetModel.deleteMany({ where: { email: user.email } });
-        }
-      } catch (_) {}
-    }
-
-    try {
-      const tokenRecord = await model.create({
-        data: {
-          tokenHash,
-          userId,
-          companyId: companyId || undefined,
-          role,
-          purpose: "PASSWORD_RESET",
-          status: "PENDING",
-          expiresAt,
-        },
-      });
-      return { rawToken, tokenRecord };
-    } catch (e) {
-      console.warn("[createPasswordResetToken] Create warning:", e);
-    }
+      }
+    );
+  } catch (e) {
+    console.warn(
+      "[createPasswordResetToken] Delete warning:",
+      e
+    );
   }
 
-  return { rawToken, tokenRecord: null };
+  /*
+   * Create the new reset token.
+   */
+  try {
+    const tokenRecord =
+      await prisma.passwordResetToken.create(
+        {
+          data: {
+            token_hash:
+              tokenHash,
+            user_id:
+              userId,
+            expiresAt,
+          },
+        }
+      );
+
+    return {
+      rawToken,
+      tokenRecord,
+    };
+  } catch (e) {
+    console.error(
+      "[createPasswordResetToken] Create error:",
+      e
+    );
+
+    throw e;
+  }
 }
 
 /**
- * Validate an incoming raw token string for a specific purpose (ACCOUNT_SETUP | PASSWORD_RESET).
- * Performs hash lookup, expiration check, status check, and single-use validation.
+ * Token validation codes.
  */
-export type TokenInvalidCode = "USED" | "REVOKED" | "EXPIRED" | "INVALID";
+export type TokenInvalidCode =
+  | "USED"
+  | "REVOKED"
+  | "EXPIRED"
+  | "INVALID";
 
-export async function validateToken(rawToken: string, expectedPurpose: "ACCOUNT_SETUP" | "PASSWORD_RESET") {
-  if (!rawToken || typeof rawToken !== "string") {
-    return { valid: false, reason: "Token is required", code: "INVALID" as TokenInvalidCode, record: null, user: null };
+/**
+ * Validate a raw token.
+ *
+ * Supported purposes:
+ *
+ * ACCOUNT_SETUP
+ * PASSWORD_RESET
+ */
+export async function validateToken(
+  rawToken: string,
+  expectedPurpose:
+    | "ACCOUNT_SETUP"
+    | "PASSWORD_RESET"
+) {
+  if (
+    !rawToken ||
+    typeof rawToken !==
+      "string"
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Token is required",
+      code:
+        "INVALID" as TokenInvalidCode,
+      record: null,
+      user: null,
+    };
   }
 
-  const tokenHash = hashToken(rawToken);
-  const model = getInvitationTokenModel();
+  const tokenHash =
+    hashToken(rawToken);
 
-  if (model) {
+  /*
+   * PASSWORD RESET
+   */
+  if (
+    expectedPurpose ===
+    "PASSWORD_RESET"
+  ) {
     try {
-      // 1. Try lookup in invitation_tokens table (by tokenHash or rawToken)
-      let tokenRecord = await model.findFirst({
-        where: {
-          OR: [
-            { tokenHash },
-            { tokenHash: rawToken },
-          ],
-        },
-        include: {
-          user: {
-            include: { companyRef: true },
-          },
-        },
-      });
+      const resetRecord =
+        await prisma.passwordResetToken.findFirst(
+          {
+            where: {
+              token_hash:
+                tokenHash,
+            },
+          }
+        );
 
-      if (tokenRecord) {
-        console.log(`[validateToken] Found tokenRecord: id=${tokenRecord.id}, status=${tokenRecord.status}, expiresAt=${tokenRecord.expiresAt}, purpose=${tokenRecord.purpose}`);
-        if (tokenRecord.purpose !== expectedPurpose) {
-          console.log(`[validateToken] Mismatch purpose: expected ${expectedPurpose}, got ${tokenRecord.purpose}`);
-          return { valid: false, reason: "Invalid token purpose", code: "INVALID" as TokenInvalidCode, record: null, user: null };
-        }
-
-        if (tokenRecord.status === "USED") {
-          console.log(`[validateToken] Status is USED`);
-          return { valid: false, reason: "This token has already been used", code: "USED" as TokenInvalidCode, record: null, user: null };
-        }
-
-        if (tokenRecord.status === "REVOKED") {
-          console.log(`[validateToken] Status is REVOKED`);
-          return { valid: false, reason: "This invitation link has been revoked", code: "REVOKED" as TokenInvalidCode, record: null, user: null };
-        }
-
-        if (tokenRecord.expiresAt < new Date()) {
-          console.log(`[validateToken] Token is EXPIRED: expiresAt ${tokenRecord.expiresAt} < now ${new Date()}`);
-          // Mark as expired in DB
-          try {
-            await model.update({
-              where: { id: tokenRecord.id },
-              data: { status: "EXPIRED" },
-            });
-          } catch (_) {}
-          return { valid: false, reason: "This link has expired (24-hour limit)", code: "EXPIRED" as TokenInvalidCode, record: null, user: null };
-        }
-
-        if (tokenRecord.status !== "PENDING") {
-          console.log(`[validateToken] Status is not PENDING: ${tokenRecord.status}`);
-          return { valid: false, reason: "This token is no longer valid", code: "INVALID" as TokenInvalidCode, record: null, user: null };
-        }
-
-        return { valid: true, reason: null, code: null, record: tokenRecord, user: tokenRecord.user };
-      } else {
-        console.log(`[validateToken] No tokenRecord found for rawToken or tokenHash`);
+      if (!resetRecord) {
+        return {
+          valid: false,
+          reason:
+            "This password reset link is invalid.",
+          code:
+            "INVALID" as TokenInvalidCode,
+          record: null,
+          user: null,
+        };
       }
+
+      if (
+        resetRecord.used_at
+      ) {
+        return {
+          valid: false,
+          reason:
+            "This password reset link has already been used.",
+          code:
+            "USED" as TokenInvalidCode,
+          record: null,
+          user: null,
+        };
+      }
+
+      if (
+        resetRecord.expiresAt <
+        new Date()
+      ) {
+        return {
+          valid: false,
+          reason:
+            "This password reset link has expired (30-minute limit).",
+          code:
+            "EXPIRED" as TokenInvalidCode,
+          record: null,
+          user: null,
+        };
+      }
+
+      if (
+        !resetRecord.user_id
+      ) {
+        return {
+          valid: false,
+          reason:
+            "Invalid reset token association.",
+          code:
+            "INVALID" as TokenInvalidCode,
+          record: null,
+          user: null,
+        };
+      }
+
+      const user =
+        await prisma.user.findUnique({
+          where: {
+            id:
+              resetRecord.user_id,
+          },
+          include: {
+            companyRef: true,
+          },
+        });
+
+      if (!user) {
+        return {
+          valid: false,
+          reason:
+            "The user associated with this token no longer exists.",
+          code:
+            "INVALID" as TokenInvalidCode,
+          record: null,
+          user: null,
+        };
+      }
+
+      return {
+        valid: true,
+        reason: null,
+        code: null,
+        record: resetRecord,
+        user,
+      };
     } catch (err) {
-      console.warn("[validateToken] Warning/skipped:", err);
+      console.warn(
+        "[validateToken PASSWORD_RESET] Error:",
+        err
+      );
+
+      return {
+        valid: false,
+        reason:
+          "Internal server error during validation.",
+        code:
+          "INVALID" as TokenInvalidCode,
+        record: null,
+        user: null,
+      };
     }
   }
 
-  // 2. Legacy fallback check for PasswordResetToken table if purpose is PASSWORD_RESET
-  const resetModel = getPasswordResetTokenModel();
-  if (expectedPurpose === "PASSWORD_RESET" && resetModel) {
+  /*
+   * ACCOUNT SETUP
+   */
+  const model =
+    getInvitationTokenModel();
+
+  if (
+    model &&
+    expectedPurpose ===
+      "ACCOUNT_SETUP"
+  ) {
     try {
-      const legacyReset = await resetModel.findUnique({
-        where: { token: rawToken },
-      });
-      if (legacyReset) {
-        if (legacyReset.expiresAt < new Date()) {
-          try { await resetModel.delete({ where: { id: legacyReset.id } }); } catch (_) {}
-          return { valid: false, reason: "Password reset link has expired", code: "EXPIRED" as TokenInvalidCode, record: null, user: null };
-        }
-        const user = await prisma.user.findUnique({
-          where: { email: legacyReset.email },
-          include: { companyRef: true },
+      /*
+       * Lookup by hashed token.
+       *
+       * The raw-token fallback is retained because
+       * older invitation records may have stored the
+       * token differently.
+       */
+      const tokenRecord =
+        await model.findFirst({
+          where: {
+            OR: [
+              {
+                tokenHash,
+              },
+              {
+                tokenHash:
+                  rawToken,
+              },
+            ],
+          },
         });
-        if (user) {
-          return { valid: true, reason: null, code: null, record: null, legacyReset, user };
+
+      if (tokenRecord) {
+        /*
+         * InvitationToken does not have an explicit
+         * Prisma user relation in the current implementation.
+         */
+        const user =
+          tokenRecord.userId
+            ? await prisma.user.findUnique(
+                {
+                  where: {
+                    id:
+                      tokenRecord.userId,
+                  },
+                  include: {
+                    companyRef: true,
+                  },
+                }
+              )
+            : null;
+
+        if (
+          tokenRecord.usedAt
+        ) {
+          return {
+            valid: false,
+            reason:
+              "This invitation link has already been used",
+            code:
+              "USED" as TokenInvalidCode,
+            record: null,
+            user: null,
+          };
         }
+
+        if (
+          tokenRecord.expiresAt <
+          new Date()
+        ) {
+          return {
+            valid: false,
+            reason:
+              "This link has expired (24-hour limit)",
+            code:
+              "EXPIRED" as TokenInvalidCode,
+            record: null,
+            user: null,
+          };
+        }
+
+        return {
+          valid: true,
+          reason: null,
+          code: null,
+          record: tokenRecord,
+          user,
+        };
       }
-    } catch (_) {}
+    } catch (err) {
+      console.warn(
+        "[validateToken] Warning/skipped:",
+        err
+      );
+    }
   }
 
-  return { valid: false, reason: "This link has expired or is no longer valid.", code: "INVALID" as TokenInvalidCode, record: null, user: null };
+  return {
+    valid: false,
+    reason:
+      "This link has expired or is no longer valid.",
+    code:
+      "INVALID" as TokenInvalidCode,
+    record: null,
+    user: null,
+  };
 }

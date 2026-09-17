@@ -9,11 +9,12 @@ import { prisma } from "./prisma";
  */
 export async function getApiKey(key: string, defaultValue?: string): Promise<string> {
   try {
-    const config = await prisma.systemConfig.findUnique({
+    const config = await prisma.systemConfig.findFirst({
       where: { key: key.toUpperCase().trim() },
     });
     if (config) {
-      return config.value;
+      if (typeof config.value === 'string') return config.value;
+      if (config.value !== null && config.value !== undefined) return String(config.value);
     }
   } catch (error) {
     console.error(`Failed to fetch dynamic API key [${key}] from DB:`, error);

@@ -3,14 +3,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { IconPlus, IconEdit, IconTrash, IconCheck, IconX, IconDatabase, IconToggleLeft } from "@tabler/icons-react";
-import { SuccessPopup } from "@/components/common/SuccessPopup";
+import toast from "react-hot-toast";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 
 export default function FeaturesAdminPage() {
   const [features, setFeatures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const fetchFeatures = async () => {
     setLoading(true);
@@ -22,7 +20,7 @@ export default function FeaturesAdminPage() {
       const data = await res.json();
       setFeatures(data);
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -45,9 +43,9 @@ export default function FeaturesAdminPage() {
       });
       if (!res.ok) throw new Error("Failed to update status");
       fetchFeatures();
-      setSuccess(`Feature ${newStatus === "ACTIVE" ? "activated" : "deactivated"} successfully`);
+      toast.success(`Feature ${newStatus === "ACTIVE" ? "activated" : "deactivated"} successfully`);
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -63,9 +61,9 @@ export default function FeaturesAdminPage() {
         throw new Error(data.error || "Failed to delete feature");
       }
       fetchFeatures();
-      setSuccess("Feature deleted successfully");
+      toast.success("Feature deleted successfully");
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -86,8 +84,6 @@ export default function FeaturesAdminPage() {
 
   return (
     <div className="space-y-6 text-nexus-text">
-      {success && <SuccessPopup message={success} type="success" onClose={() => setSuccess(null)} />}
-      {error && <SuccessPopup message={error} type="error" onClose={() => setError(null)} />}
 
       <div className="flex items-center justify-between">
         <div>

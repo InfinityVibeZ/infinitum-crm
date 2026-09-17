@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation';
 import { Plan, BillingPrice, PlanFeature, Feature } from '@prisma/client';
 import { apiClient } from "@/lib/apiClient";
 import Link from 'next/link';
-import { SuccessPopup } from '@/components/common/SuccessPopup';
+import toast from 'react-hot-toast';
 import { 
   IconArrowLeft, 
   IconCheck, 
@@ -79,9 +79,7 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
 
   // UI State
   const [isSaving, setIsSaving] = useState(false);
-  const [globalError, setGlobalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchConfigs = async () => {
@@ -131,7 +129,7 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
         setPrices(initPrices);
 
       } catch (e: any) {
-        setGlobalError(e.message || 'Failed to load configuration');
+        toast.error(e.message || 'Failed to load configuration');
       }
     };
     
@@ -139,9 +137,27 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
   }, [initialData, mode]);
 
   const handlePriceChange = (idx: number, field: keyof PriceInput, value: any) => {
+    let sanitizedValue = value;
+    if (field === 'amount' || field === 'originalAmount') {
+      sanitizedValue = String(value).replace(/[^0-9.]/g, '');
+      let parts = sanitizedValue.split('.');
+      if (parts.length > 2) {
+        parts = [parts[0], parts.slice(1).join('')];
+      }
+      if (parts.length === 2 && parts[1].length > 2) {
+        parts[1] = parts[1].substring(0, 2);
+      }
+      sanitizedValue = parts.join('.');
+    } else if (field === 'trailingDays') {
+      sanitizedValue = String(value).replace(/[^0-9]/g, '');
+      if (sanitizedValue.length > 2) {
+        sanitizedValue = sanitizedValue.substring(0, 2);
+      }
+    }
+
     setPrices((prev) => {
       const copy = [...prev];
-      copy[idx] = { ...copy[idx], [field]: value };
+      copy[idx] = { ...copy[idx], [field]: sanitizedValue };
       return copy;
     });
     // Clear error for this field
@@ -186,7 +202,7 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
 
     const hasEnabledPrice = prices.some(p => p.enabled);
     if (!hasEnabledPrice) {
-      setGlobalError('You must enable at least one billing cycle.');
+      toast.error('You must enable at least one billing cycle.');
       isValid = false;
     }
 
@@ -205,9 +221,7 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
 
     setFieldErrors(errors);
     if (!isValid && Object.keys(errors).length > 0) {
-      setGlobalError('Please fix the errors in the form.');
-    } else {
-      setGlobalError(null);
+      toast.error('Please fix the errors in the form.');
     }
     
     return isValid;
@@ -216,7 +230,6 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
   const handleSubmit = async () => {
     if (!validate()) return;
     setIsSaving(true);
-    setGlobalError(null);
 
     const payload = {
       name: name.trim(),
@@ -250,12 +263,13 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
       const data = await (method === 'POST' ? apiClient.post(url, payload) : apiClient.patch(url, payload));
       if (data.success === true) {
         setIsSaving(false);
-        setSuccess('Plan saved successfully');
+        toast.success('Plan saved successfully');
+        router.push('/admin/plans');
       } else {
         throw new Error('API did not return success');
       }
     } catch (e: any) {
-      setGlobalError(e.message);
+      toast.error(e.message);
       setIsSaving(false);
     }
   };
@@ -276,12 +290,6 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
 
   return (
     <div className="text-nexus-text">
-      {globalError && <SuccessPopup message={globalError} type="error" onClose={() => setGlobalError(null)} />}
-      {success && <SuccessPopup message={success} type="success" onClose={() => {
-        setSuccess(null);
-        router.push('/admin/plans');
-      }} />}
-
       {/* PAGE HEADER */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
         <div>
@@ -332,7 +340,6 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
                     value={name} 
                     onChange={(e) => { setName(e.target.value); setFieldErrors(p => ({...p, name: ''})); }} 
                   />
-                  {fieldErrors['name'] && <p className="text-xs text-red-400 mt-1">{fieldErrors['name']}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-1">Plan Code *</label>
@@ -342,7 +349,6 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
                     value={code} 
                     onChange={(e) => { setCode(e.target.value); setFieldErrors(p => ({...p, code: ''})); }} 
                   />
-                  {fieldErrors['code'] && <p className="text-xs text-red-400 mt-1">{fieldErrors['code']}</p>}
                 </div>
               </div>
               
@@ -464,7 +470,7 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
                               <div className="relative flex items-center">
                                 <span className="absolute left-3 text-nexus-muted font-bold">{currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : ''}</span>
                                 <input 
-                                  type="number" min="0" step="0.01"
+                                  type="text" inputMode="decimal"
                                   placeholder="0.00"
                                   className={classNames("w-full bg-nexus-card border rounded-lg p-2 pl-7 pr-12 text-sm font-bold focus:outline-none transition-colors", fieldErrors[`price-${idx}-amount`] ? "border-red-500/50 focus:border-red-500/50 text-red-400" : "border-nexus-border focus:border-nexus-primary")}
                                   value={p.amount} 
@@ -483,7 +489,7 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
                               <div className="relative flex items-center">
                                 <span className="absolute left-3 text-nexus-muted/50 font-bold">{currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : ''}</span>
                                 <input 
-                                  type="number" min="0" step="0.01"
+                                  type="text" inputMode="decimal"
                                   placeholder="0.00"
                                   className={classNames("w-full bg-nexus-card/50 border rounded-lg p-2 pl-7 text-sm focus:outline-none transition-colors", fieldErrors[`price-${idx}-originalAmount`] ? "border-red-500/50" : "border-nexus-border focus:border-nexus-primary")}
                                   value={p.originalAmount} 
@@ -506,13 +512,12 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
                         <div className="mt-4 pt-4 border-t border-nexus-border/30">
                           <label className="block text-[10px] font-bold text-nexus-text-secondary uppercase tracking-wider mb-1">Trial / Trailing Days</label>
                           <input 
-                            type="number" min="0"
+                            type="text" inputMode="numeric"
                             className={classNames("w-full max-w-[120px] bg-nexus-card border rounded-lg p-2 text-sm focus:outline-none transition-colors", fieldErrors[`price-${idx}-trailingDays`] ? "border-red-500/50" : "border-nexus-border focus:border-nexus-primary")}
                             value={p.trailingDays} 
                             onChange={(e) => handlePriceChange(idx, "trailingDays", e.target.value)} 
                           />
                           <p className="text-[10px] text-nexus-muted mt-1">Customers receive access before the first billing period begins.</p>
-                          {fieldErrors[`price-${idx}-trailingDays`] && <p className="text-[10px] text-red-400 mt-1">{fieldErrors[`price-${idx}-trailingDays`]}</p>}
                         </div>
 
                       </div>
@@ -628,7 +633,6 @@ export default function PlanForm({ mode, initialData }: PlanFormProps) {
                                 value={f.configuration} 
                                 onChange={(e) => handleFeatureChange(idx, 'configuration', e.target.value)} 
                               />
-                              {fieldErrors[`feature-${idx}-configuration`] && <p className="text-xs text-red-400 mt-1">{fieldErrors[`feature-${idx}-configuration`]}</p>}
                             </div>
                           )}
                         </div>

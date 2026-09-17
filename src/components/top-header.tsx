@@ -43,9 +43,6 @@ export function TopHeader({ onMenuClick, showMenuButton }: TopHeaderProps = {}) 
         if (userStr) u = JSON.parse(userStr);
       } catch (e) { }
     }
-    if (u?.role === "SUPER_ADMIN") {
-      return { ...u, company: "", department: "", category: "" };
-    }
     return u;
   }, [user]);
 
@@ -88,16 +85,19 @@ export function TopHeader({ onMenuClick, showMenuButton }: TopHeaderProps = {}) 
           </button>
         )}
         <div className="min-w-0 flex-1">
-          {!isSuperAdmin && (
-            <>
-              <h2 className="text-sm sm:text-base font-extrabold text-nexus-text tracking-tight truncate">
-                {effectiveUser?.company || effectiveUser?.department || "Company Workspace"}
-              </h2>
-              <p className="text-[10px] sm:text-[11px] text-[#10D078] font-bold mt-0.5">
-                {(effectiveUser as any)?.category || ""}
-              </p>
-            </>
-          )}
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm sm:text-base font-extrabold text-nexus-text tracking-tight truncate max-w-[150px] sm:max-w-xs">
+              {effectiveUser?.company}
+            </h2>
+            {(effectiveUser?.planName || (effectiveUser as any)?.subscription?.name || (effectiveUser as any)?.plan) && (
+              <span className="text-[9px] sm:text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded-md uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                {effectiveUser?.planName || (effectiveUser as any)?.subscription?.name || (effectiveUser as any)?.plan}
+              </span>
+            )}
+          </div>
+          <p className={`text-[10px] sm:text-[11px] font-bold mt-0.5 ${roleBadge.color.replace('bg-', 'text-').replace('/10', '').replace('border-', 'text-')}`}>
+            {effectiveUser?.isOwner && effectiveUser.role === "ADMIN" ? "Admin / Owner" : roleBadge.label}
+          </p>
         </div>
       </div>
 
@@ -114,9 +114,7 @@ export function TopHeader({ onMenuClick, showMenuButton }: TopHeaderProps = {}) 
             <p className="text-xs font-bold text-nexus-text leading-tight truncate max-w-[140px]">
               {effectiveUser?.name || "User"}
             </p>
-            <p className="text-[10px] text-nexus-muted font-medium capitalize">
-              {roleBadge.label}
-            </p>
+
           </div>
           <IconChevronDown size={14} className={`text-nexus-muted transition-transform duration-200 ${showDropdown ? "rotate-180" : ""}`} />
         </button>
@@ -138,19 +136,6 @@ export function TopHeader({ onMenuClick, showMenuButton }: TopHeaderProps = {}) 
                   <p className="text-[10px] text-nexus-muted truncate">
                     {effectiveUser?.email || ""}
                   </p>
-                  {!isSuperAdmin && (effectiveUser?.company || effectiveUser?.department) && (
-                    <p className="text-[10px] text-[#10D078] font-semibold truncate mt-0.5">
-                      {effectiveUser?.company || effectiveUser?.department}
-                    </p>
-                  )}
-                  <div className="mt-1.5">
-                    <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full border ${roleBadge.color}`}>
-                      {effectiveUser?.role === "SUPER_ADMIN" && <IconCrown size={8} />}
-                      {effectiveUser?.role === "ADMIN" && <IconUserShield size={8} />}
-                      {effectiveUser?.role === "USER" && <IconUsers size={8} />}
-                      {roleBadge.label}
-                    </span>
-                  </div>
                 </div>
               </div>
 

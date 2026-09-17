@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
-import { SuccessPopup } from "@/components/common/SuccessPopup";
+import toast from "react-hot-toast";
 import {
   IconCreditCard,
   IconCheck,
@@ -57,6 +57,10 @@ interface Subscription {
   planPriceId: string | null;
   billingInterval: string | null;
   cancelAtPeriodEnd: boolean;
+  trial_starts_at?: string | null;
+  trialEndsAt?: string | null;
+  currentPeriodStart?: string | null;
+  currentPeriodEnd?: string | null;
   plan: Plan;
   planPrice: any;
 }
@@ -68,8 +72,6 @@ export default function SettingsSubscriptionPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   // Mutation states
   const [isMutating, setIsMutating] = useState(false);
@@ -117,7 +119,7 @@ export default function SettingsSubscriptionPage() {
       }
 
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -142,13 +144,13 @@ export default function SettingsSubscriptionPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to change plan");
 
-      setToast({ message: `Successfully changed plan to ${targetPlanToChange.name}`, type: "success" });
+      toast.success(`Successfully changed plan to ${targetPlanToChange.name}`);
       setTargetPlanToChange(null);
       setTargetPriceToChange(null);
       resetEntitlementsCache();
       fetchData();
     } catch (err: any) {
-      setToast({ message: err.message, type: "error" });
+      toast.error(err.message);
     } finally {
       setIsMutating(false);
     }
@@ -161,12 +163,12 @@ export default function SettingsSubscriptionPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to cancel subscription");
 
-      setToast({ message: "Subscription set to cancel at the end of the period.", type: "success" });
+      toast.success("Subscription set to cancel at the end of the period.");
       setShowCancelDialog(false);
       resetEntitlementsCache();
       fetchData();
     } catch (err: any) {
-      setToast({ message: err.message, type: "error" });
+      toast.error(err.message);
     } finally {
       setIsMutating(false);
     }
@@ -179,11 +181,11 @@ export default function SettingsSubscriptionPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to reactivate subscription");
 
-      setToast({ message: "Subscription reactivated successfully.", type: "success" });
+      toast.success("Subscription reactivated successfully.");
       resetEntitlementsCache();
       fetchData();
     } catch (err: any) {
-      setToast({ message: err.message, type: "error" });
+      toast.error(err.message);
     } finally {
       setIsMutating(false);
     }
@@ -200,11 +202,11 @@ export default function SettingsSubscriptionPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Dev billing bypass failed (are you in prod?)");
 
-      setToast({ message: "Dev Billing: Subscription activated!", type: "success" });
+      toast.success("Dev Billing: Subscription activated!");
       resetEntitlementsCache();
       fetchData();
     } catch (err: any) {
-      setToast({ message: err.message, type: "error" });
+      toast.error(err.message);
     } finally {
       setIsMutating(false);
     }
@@ -357,7 +359,7 @@ export default function SettingsSubscriptionPage() {
           )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {plans.map((plan: any) => {
+          {plans.map((plan) => {
             // SOURCE OF TRUTH: prices[] only — never plan.basePrice
             const activePrice =
               plan.prices?.find((p: any) => p.billingInterval === billingInterval && p.isActive) ||
@@ -511,12 +513,6 @@ export default function SettingsSubscriptionPage() {
         </DialogContent>
       </Dialog>
 
-      {toast && (
-        <SuccessPopup 
-          message={toast.message} 
-          onClose={() => setToast(null)}
-        />
-      )}
     </div>
   );
 }

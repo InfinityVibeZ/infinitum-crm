@@ -18,7 +18,11 @@ export async function recordLeadStatusTransition({
 }) {
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, status: true, companyId: true },
+    select: {
+      id: true,
+      status: true,
+      companyId: true,
+    },
   });
 
   if (!lead) return null;
@@ -41,13 +45,14 @@ export async function recordLeadStatusTransition({
       fromStatus,
       toStatus,
       userId: userId || null,
-      activityId: activityId || null,
-      reason: reason || null,
-      lostReason: lostReason || null,
-      changedAt: new Date(),
+      notes: reason || lostReason || null,
       companyId: lead.companyId,
+      createdAt: new Date(),
     },
   });
 
-  return { updatedLead, history };
+  return {
+    updatedLead,
+    history,
+  };
 }

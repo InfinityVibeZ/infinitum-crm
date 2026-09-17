@@ -10,6 +10,7 @@ import {
   IconDeviceFloppy,
   IconRefresh,
 } from "@tabler/icons-react";
+import toast from "react-hot-toast";
 
 interface RoleAccessConfig {
   SUPER_ADMIN: boolean;
@@ -102,8 +103,6 @@ export default function RolePermissionsPage() {
   const [permissions, setPermissions] = useState<PermissionsMap | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     if (isSuperAdmin) {
@@ -113,14 +112,13 @@ export default function RolePermissionsPage() {
 
   const fetchPermissions = async () => {
     setIsLoading(true);
-    setError("");
     try {
       const res = await fetch("/api/settings/permissions");
       if (!res.ok) throw new Error("Failed to load permission matrix.");
       const data = await res.json();
       setPermissions(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load permissions.");
+      toast.error(err instanceof Error ? err.message : "Failed to load permissions.");
     } finally {
       setIsLoading(false);
     }
@@ -153,8 +151,6 @@ export default function RolePermissionsPage() {
   const handleSave = async () => {
     if (!permissions) return;
     setIsSaving(true);
-    setError("");
-    setSuccess("");
 
     try {
       const res = await fetch("/api/settings/permissions", {
@@ -181,10 +177,9 @@ export default function RolePermissionsPage() {
         // Non-fatal — the saved matrix still applies to everyone at their next login.
       }
 
-      setSuccess("Permissions matrix updated successfully. Changes take effect immediately!");
-      setTimeout(() => setSuccess(""), 4000);
+      toast.success("Permissions matrix updated successfully. Changes take effect immediately!");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update permissions.");
+      toast.error(err instanceof Error ? err.message : "Failed to update permissions.");
     } finally {
       setIsSaving(false);
     }
@@ -230,18 +225,6 @@ export default function RolePermissionsPage() {
           </button>
         </div>
       </div>
-
-      {success && (
-        <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-xl px-4 py-3 text-xs text-emerald-400 font-semibold animate-in slide-in-from-top-2 duration-300">
-          {success}
-        </div>
-      )}
-
-      {error && (
-        <div className="bg-red-500/15 border border-red-500/30 rounded-xl px-4 py-3 text-xs text-red-400 font-semibold animate-shake">
-          {error}
-        </div>
-      )}
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-3">

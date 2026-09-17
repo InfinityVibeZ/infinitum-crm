@@ -16,8 +16,10 @@ import {
   IconUser,
   IconMail,
   IconShieldCheck,
+
   IconClock,
 } from "@tabler/icons-react";
+import toast from "react-hot-toast";
 import { PASSWORD_REQUIREMENTS, getPasswordStrength } from "@/lib/passwordPolicy";
 
 export default function AccountSetupPage() {
@@ -88,9 +90,6 @@ function AccountSetupPageClient() {
         setLoading(false);
       }
     }
-        setLoading(false);
-      }
-    }
 
     fetchTokenInfo();
   }, [token]);
@@ -106,13 +105,12 @@ function AccountSetupPageClient() {
     if (!isFormValid || submitting) return;
 
     setSubmitting(true);
-    setError(null);
 
     try {
       await apiClient.post("/api/auth/setup-account", { token, password });
       setSuccess(true);
     } catch (err: any) {
-      setError(err.message || "An error occurred");
+      toast.error(err.message || "An error occurred");
     } finally {
       setSubmitting(false);
     }
@@ -244,12 +242,7 @@ function AccountSetupPageClient() {
               </div>
             )}
 
-            {error && (
-              <div className="p-3 text-xs bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-300 flex items-start gap-2">
-                <IconAlertTriangle size={16} className="shrink-0 text-rose-400 mt-0.5" />
-                <span>{error}</span>
-              </div>
-            )}
+
 
             {/* Password Input */}
             <div className="space-y-1.5">

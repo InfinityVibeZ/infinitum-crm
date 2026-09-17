@@ -1,139 +1,392 @@
-import { hasFeature } from "@/lib/subscription";
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { extractTokenFromRequest, getTokenPayload, requireRole, requireAuthenticatedUser } from "@/lib/auth";
+import {
+  requireAuthenticatedUser,
+  requireRole,
+} from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
 
-/** GET /api/settings/api-keys — List all API keys (Super Admin only) */
-export async function GET(request: Request) {
+/*
+ * SystemConfig does not have category or label fields.
+ *
+ * Keep the standard API-key identifiers here so this endpoint
+ * can still provide a clean API-key management screen without
+ * changing the database schema.
+ */
+const API_KEY_NAMES = [
+  "GEMINI_API_KEY",
+  "OPENAI_API_KEY",
+  "SENDGRID_API_KEY",
+  "STRIPE_API_KEY",
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_USER",
+  "SMTP_PASS",
+];
+
+/**
+ * GET /api/settings/api-keys
+ *
+ * Super Admin only.
+ */
+export async function GET(
+  request: Request
+) {
   try {
-    const auth = await requireAuthenticatedUser(request);
-    if (auth instanceof Response) return auth;
-    const { payload, user: authUser } = auth;
+    const auth =
+      await requireAuthenticatedUser(
+        request
+      );
 
-    const roleError = requireRole(payload.role, ["SUPER_ADMIN"]);
-    if (roleError) return roleError;
-
-    // Fetch keys from database
-    let configs = await prisma.systemConfig.findMany({
-      where: { category: "API_KEY" },
-      orderBy: { key: "asc" },
-    });
-
-    // If empty, seed default mock/empty keys for standard integrations
-    if (configs.length === 0) {
-      const defaults = [
-        { key: "GEMINI_API_KEY", value: "nexus_gemini_sk_mock_key_value", label: "Google Gemini API Key", category: "API_KEY" },
-        { key: "OPENAI_API_KEY", value: "nexus_openai_sk_mock_key_value", label: "OpenAI API Key", category: "API_KEY" },
-        { key: "SENDGRID_API_KEY", value: "nexus_sendgrid_sk_mock_key_value", label: "SendGrid SMTP API Key", category: "API_KEY" },
-        { key: "STRIPE_API_KEY", value: "nexus_stripe_sk_mock_key_value", label: "Stripe Payments API Key", category: "API_KEY" },
-        { key: "SMTP_HOST", value: "smtp.gmail.com", label: "SMTP Mail Server Host", category: "API_KEY" },
-        { key: "SMTP_PORT", value: "587", label: "SMTP Port (587 or 465)", category: "API_KEY" },
-        { key: "SMTP_USER", value: "builtby.rajum@gmail.com", label: "SMTP Sender Username", category: "API_KEY" },
-        { key: "SMTP_PASS", value: "", label: "SMTP App Password (Google 16-char code)", category: "API_KEY" },
-      ];
-      
-      await prisma.systemConfig.createMany({ data: defaults });
-      
-      configs = await prisma.systemConfig.findMany({
-        where: { category: "API_KEY" },
-        orderBy: { key: "asc" },
-      });
+    if (auth instanceof Response) {
+      return auth;
     }
 
-    return NextResponse.json(configs);
+    const { payload } = auth;
+
+    const roleError =
+      requireRole(
+        payload.role,
+        ["SUPER_ADMIN"]
+      );
+
+    if (roleError) {
+      return roleError;
+    }
+
+    /*
+     * SystemConfig has no category column.
+     * Filter using the known API-key names.
+     */
+    let configs =
+      await prisma.systemConfig.findMany({
+        where: {
+          key: {
+            in: API_KEY_NAMES,
+          },
+        },
+        orderBy: {
+          key: "asc",
+        },
+      });
+
+    /*
+     * Seed standard API-key configuration records
+     * when none exist.
+     */
+    if (configs.length === 0) {
+      const defaults = [
+        {
+          id: crypto.randomUUID(),
+          key: "GEMINI_API_KEY",
+          value: "nexus_gemini_sk_mock_key_value",
+        },
+        {
+          id: crypto.randomUUID(),
+          key: "OPENAI_API_KEY",
+          value: "nexus_openai_sk_mock_key_value",
+        },
+        {
+          id: crypto.randomUUID(),
+          key: "SENDGRID_API_KEY",
+          value: "nexus_sendgrid_sk_mock_key_value",
+        },
+        {
+          id: crypto.randomUUID(),
+          key: "STRIPE_API_KEY",
+          value: "nexus_stripe_sk_mock_key_value",
+        },
+        {
+          id: crypto.randomUUID(),
+          key: "SMTP_HOST",
+          value: "smtp.gmail.com",
+        },
+        {
+          id: crypto.randomUUID(),
+          key: "SMTP_PORT",
+          value: "587",
+        },
+        {
+          id: crypto.randomUUID(),
+          key: "SMTP_USER",
+          value: "builtby.rajum@gmail.com",
+        },
+        {
+          id: crypto.randomUUID(),
+          key: "SMTP_PASS",
+          value: "",
+        },
+      ];
+
+      await prisma.systemConfig.createMany({
+        data: defaults,
+      });
+
+      configs =
+        await prisma.systemConfig.findMany({
+          where: {
+            key: {
+              in: API_KEY_NAMES,
+            },
+          },
+          orderBy: {
+            key: "asc",
+          },
+        });
+    }
+
+    return NextResponse.json(
+      configs
+    );
   } catch (error) {
-    console.error("GET /api/settings/api-keys error:", error);
-    return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
+    console.error(
+      "GET /api/settings/api-keys error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "Failed to fetch settings",
+      },
+      { status: 500 }
+    );
   }
 }
 
-/** POST /api/settings/api-keys — Create or Update an API key (Super Admin only) */
-export async function POST(request: Request) {
+/**
+ * POST /api/settings/api-keys
+ *
+ * Create or update an API key.
+ *
+ * SystemConfig.key is not unique in the current schema,
+ * therefore we use findFirst() followed by update/create.
+ */
+export async function POST(
+  request: Request
+) {
   try {
-    const auth = await requireAuthenticatedUser(request);
-    if (auth instanceof Response) return auth;
-    const { payload, user: authUser } = auth;
+    const auth =
+      await requireAuthenticatedUser(
+        request
+      );
 
-    const roleError = requireRole(payload.role, ["SUPER_ADMIN"]);
-    if (roleError) return roleError;
-
-    const body = await request.json();
-    const { key, value, label } = body;
-
-    if (!key || !value) {
-      return NextResponse.json({ error: "Key identifier and value are required" }, { status: 400 });
+    if (auth instanceof Response) {
+      return auth;
     }
 
-    const formattedKey = key.toUpperCase().replace(/\s+/g, "_");
+    const { payload } = auth;
 
-    const updated = await prisma.systemConfig.upsert({
-      where: { key: formattedKey },
-      update: {
-        value,
-        ...(label && { label }),
-      },
-      create: {
-        key: formattedKey,
-        value,
-        label: label || formattedKey,
-        category: "API_KEY",
-      },
-    });
+    const roleError =
+      requireRole(
+        payload.role,
+        ["SUPER_ADMIN"]
+      );
+
+    if (roleError) {
+      return roleError;
+    }
+
+    const body =
+      await request.json();
+
+    const {
+      key,
+      value,
+    } = body;
+
+    if (!key || value === undefined) {
+      return NextResponse.json(
+        {
+          error:
+            "Key identifier and value are required",
+        },
+        { status: 400 }
+      );
+    }
+
+    const formattedKey =
+      String(key)
+        .toUpperCase()
+        .replace(/\s+/g, "_");
+
+    /*
+     * Because key is not unique, find the existing
+     * record first.
+     */
+    const existing =
+      await prisma.systemConfig.findFirst({
+        where: {
+          key: formattedKey,
+        },
+      });
+
+    let updated;
+
+    if (existing) {
+      updated =
+        await prisma.systemConfig.update({
+          where: {
+            id: existing.id,
+          },
+          data: {
+            value,
+          },
+        });
+    } else {
+      updated =
+        await prisma.systemConfig.create({
+          data: {
+            id: crypto.randomUUID(),
+            key: formattedKey,
+            value,
+          },
+        });
+    }
 
     await logAuditEvent({
       action: "API_KEY_UPDATED",
       category: "System",
       severity: "WARNING",
-      actorName: payload.email.split("@")[0],
-      actorEmail: payload.email,
-      actorRole: payload.role,
-      targetName: formattedKey,
-      summary: `Updated API key: ${formattedKey}`,
+      actorName:
+        payload.email.split("@")[0],
+      actorEmail:
+        payload.email,
+      actorRole:
+        payload.role,
+      targetName:
+        formattedKey,
+      summary:
+        `Updated API key: ${formattedKey}`,
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json(
+      updated
+    );
   } catch (error) {
-    console.error("POST /api/settings/api-keys error:", error);
-    return NextResponse.json({ error: "Failed to save API key" }, { status: 500 });
+    console.error(
+      "POST /api/settings/api-keys error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "Failed to save API key",
+      },
+      { status: 500 }
+    );
   }
 }
 
-/** DELETE /api/settings/api-keys — Delete an API key (Super Admin only) */
-export async function DELETE(request: Request) {
+/**
+ * DELETE /api/settings/api-keys
+ *
+ * Super Admin only.
+ */
+export async function DELETE(
+  request: Request
+) {
   try {
-    const auth = await requireAuthenticatedUser(request);
-    if (auth instanceof Response) return auth;
-    const { payload, user: authUser } = auth;
+    const auth =
+      await requireAuthenticatedUser(
+        request
+      );
 
-    const roleError = requireRole(payload.role, ["SUPER_ADMIN"]);
-    if (roleError) return roleError;
+    if (auth instanceof Response) {
+      return auth;
+    }
 
-    const url = new URL(request.url);
-    const key = url.searchParams.get("key");
+    const { payload } = auth;
+
+    const roleError =
+      requireRole(
+        payload.role,
+        ["SUPER_ADMIN"]
+      );
+
+    if (roleError) {
+      return roleError;
+    }
+
+    const url =
+      new URL(request.url);
+
+    const key =
+      url.searchParams.get(
+        "key"
+      );
 
     if (!key) {
-      return NextResponse.json({ error: "Key parameter is required" }, { status: 400 });
+      return NextResponse.json(
+        {
+          error:
+            "Key parameter is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    /*
+     * key is not unique, so resolve the actual
+     * SystemConfig record first.
+     */
+    const existing =
+      await prisma.systemConfig.findFirst({
+        where: {
+          key,
+        },
+      });
+
+    if (!existing) {
+      return NextResponse.json(
+        {
+          error:
+            "API key not found",
+        },
+        { status: 404 }
+      );
     }
 
     await prisma.systemConfig.delete({
-      where: { key },
+      where: {
+        id: existing.id,
+      },
     });
 
     await logAuditEvent({
       action: "API_KEY_DELETED",
       category: "System",
       severity: "DANGER",
-      actorName: payload.email.split("@")[0],
-      actorEmail: payload.email,
-      actorRole: payload.role,
-      targetName: key,
-      summary: `Deleted API key: ${key}`,
+      actorName:
+        payload.email.split("@")[0],
+      actorEmail:
+        payload.email,
+      actorRole:
+        payload.role,
+      targetName:
+        key,
+      summary:
+        `Deleted API key: ${key}`,
     });
 
-    return NextResponse.json({ message: "API key deleted successfully" });
+    return NextResponse.json({
+      message:
+        "API key deleted successfully",
+    });
   } catch (error) {
-    console.error("DELETE /api/settings/api-keys error:", error);
-    return NextResponse.json({ error: "Failed to delete API key" }, { status: 500 });
+    console.error(
+      "DELETE /api/settings/api-keys error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "Failed to delete API key",
+      },
+      { status: 500 }
+    );
   }
 }

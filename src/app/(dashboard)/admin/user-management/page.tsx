@@ -24,7 +24,7 @@ import {
   IconLoader2,
 } from "@tabler/icons-react";
 import { useAuthStore } from "@/store/auth";
-import { SuccessPopup } from "@/components/common/SuccessPopup";
+import toast from "react-hot-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -127,7 +127,7 @@ function UserRow({
   onResendInvitation?: (u: AppUser) => void;
 }) {
   const roleBadge = ROLE_BADGE[u.role] ?? ROLE_BADGE.USER;
-  const statusBadge = (u.status as string) === "PENDING" && u.isInvitationExpired
+  const statusBadge = u.isInvitationExpired
     ? STATUS_BADGE.EXPIRED
     : STATUS_BADGE[u.status] ?? STATUS_BADGE.ACTIVE;
   const isMe = u.id === currentUserId;
@@ -174,7 +174,7 @@ function UserRow({
         <td className="p-3">
           <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${roleBadge.color}`}>
             {roleBadge.icon}
-            {roleBadge.label}
+            {isTargetOwner && u.role === "ADMIN" ? "Admin / Owner" : roleBadge.label}
           </span>
         </td>
       )}
@@ -217,7 +217,7 @@ function UserRow({
               <button onClick={() => onEdit(u)} className="p-1.5 rounded-md text-nexus-muted hover:text-nexus-primary hover:bg-nexus-primary/10 transition-colors" title="Edit">
                 <IconEdit size={14} />
               </button>
-              {(u.status as string) === "PENDING" && onResendInvitation && (
+              {u.isInvitationExpired && onResendInvitation && (
                 <button
                   onClick={() => onResendInvitation(u)}
                   className="p-1.5 rounded-md text-amber-400 hover:bg-amber-500/10 transition-colors"
@@ -273,17 +273,20 @@ function UserRow({
 // ─── Admin Row (Flat) ─────────────────────────────────────────────────────────
 
 function AdminRow({
-  admin, currentUserId, onView, onEdit, onToggleStatus, onSoftDelete, showActions = true,
+  admin, currentUserId, onView, onEdit, onToggleStatus, onSoftDelete, onResendInvitation, showActions = true, isTargetOwner = false,
 }: {
   admin: AppUser;
   currentUserId?: string;
   showActions?: boolean;
+  isTargetOwner?: boolean;
   onView: (u: AppUser) => void;
   onEdit: (u: AppUser) => void;
   onToggleStatus: (u: AppUser) => void;
   onSoftDelete: (u: AppUser) => void;
+  onResendInvitation?: (u: AppUser) => void;
 }) {
   const statusBadge = STATUS_BADGE[admin.status] ?? STATUS_BADGE.ACTIVE;
+  const roleBadge = ROLE_BADGE[admin.role] ?? ROLE_BADGE.ADMIN;
   const isMe = admin.id === currentUserId;
 
   return (
@@ -302,6 +305,13 @@ function AdminRow({
             <p className="text-[11px] text-nexus-muted">{admin.email}</p>
           </div>
         </div>
+      </td>
+
+      <td className="p-3">
+        <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${roleBadge.color}`}>
+          {roleBadge.icon}
+          {isTargetOwner && admin.role === "ADMIN" ? "Admin / Owner" : roleBadge.label}
+        </span>
       </td>
 
       <td className="p-3">
@@ -367,9 +377,17 @@ function CompanyAccordionCard({
   onEdit,
   onToggleStatus,
   onSoftDelete,
+  onResendInvitation,
   showActions = false,
 }: {
-  company: { id: string; name: string; category?: string; status?: string; isActive?: boolean };
+  company: {
+    id: string;
+    name: string;
+    category?: string;
+    status?: string;
+    isActive?: boolean;
+    ownerUserId?: string;
+  };
   admins: AppUser[];
   directUsers: AppUser[];
   currentUserId?: string;
@@ -380,6 +398,7 @@ function CompanyAccordionCard({
   onEdit: (u: AppUser) => void;
   onToggleStatus: (u: AppUser) => void;
   onSoftDelete: (u: AppUser) => void;
+  onResendInvitation?: (u: AppUser) => void;
 }) {
   const isInactive = !company.isActive || company.status === "INACTIVE";
   const totalUserCount = directUsers.length;
@@ -437,6 +456,7 @@ function CompanyAccordionCard({
                     <thead>
                       <tr className="border-b border-nexus-border text-[11px] uppercase text-nexus-muted font-semibold bg-nexus-bg/40">
                         <th className="p-3 pl-4">Admin</th>
+                        <th className="p-3">Role</th>
                         <th className="p-3">Status</th>
                         <th className="p-3">Phone</th>
                         <th className="p-3">Last Login</th>
@@ -450,11 +470,13 @@ function CompanyAccordionCard({
                           key={admin.id}
                           admin={admin}
                           currentUserId={currentUserId}
+                          isTargetOwner={admin.id === company.ownerUserId}
                           showActions={showActions}
                           onView={onView}
                           onEdit={onEdit}
                           onToggleStatus={onToggleStatus}
                           onSoftDelete={onSoftDelete}
+                          onResendInvitation={onResendInvitation}
                         />
                       ))}
                     </tbody>
@@ -512,6 +534,7 @@ function CompanyAccordionCard({
                             onEdit={onEdit}
                             onToggleStatus={onToggleStatus}
                             onSoftDelete={onSoftDelete}
+                            onResendInvitation={onResendInvitation}
                           />
                         );
                       })}
@@ -550,7 +573,6 @@ export default function UserManagementPage() {
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
   const [confirmSoftDeleteUser, setConfirmSoftDeleteUser] = useState<AppUser | null>(null);
   const [confirmToggleStatusUser, setConfirmToggleStatusUser] = useState<AppUser | null>(null);
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Form State
@@ -566,34 +588,28 @@ export default function UserManagementPage() {
   const [generatedPassword, setGeneratedPassword] = useState("");
   const [setupLink, setSetupLink] = useState("");
   const [formSaving, setFormSaving] = useState(false);
-
-  function showToast(msg: string, type: "success" | "error") {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
-  }
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const [resendingId, setResendingId] = useState<string | null>(null);
 
   async function handleResendInvitation(u: AppUser) {
     setResendingId(u.id);
     try {
-      const token = localStorage.getItem("nexus-token");
       const res = await fetch(`/api/users/${u.id}/resend-invitation`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to resend invitation");
-      showToast(`Activation link resent to ${u.email}`, "success");
+      if (!res.ok) throw new Error(data.details || data.error || "Failed to resend invitation");
+      toast.success(`Activation link resent to ${u.email}`);
       fetchData(true);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : "Error resending invitation", "error");
+      toast.error(e instanceof Error ? e.message : "Error resending invitation");
     } finally {
       setResendingId(null);
     }
   }
 
-  const [myAdminAccount, setMyAdminAccount] = useState<{ isActive: boolean; status: string } | null>(null);
+  const [myAdminAccount, setMyAdminAccount] = useState<{ isActive: boolean; status: string; companyId?: string; company?: string } | null>(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -606,12 +622,9 @@ export default function UserManagementPage() {
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const token = localStorage.getItem("nexus-token");
-      const headers = { Authorization: `Bearer ${token}` };
-
       const [compRes, userRes] = await Promise.all([
-        fetch("/api/companies", { headers, cache: "no-store" }),
-        fetch(isSuperAdmin ? "/api/users?grouped=true" : "/api/users", { headers, cache: "no-store" }),
+        fetch("/api/companies", { cache: "no-store" }),
+        fetch(isSuperAdmin ? "/api/users?grouped=true" : "/api/users", { cache: "no-store" }),
       ]);
 
       const compData = await compRes.json();
@@ -626,7 +639,7 @@ export default function UserManagementPage() {
         setUsers(data);
       }
     } catch {
-      showToast("Failed to load user management data", "error");
+      toast.error("Failed to load user management data");
     } finally {
       if (!silent) setLoading(false);
     }
@@ -653,7 +666,7 @@ export default function UserManagementPage() {
   const onlyAdmins = adminGroups.filter((a) => a.role === "ADMIN");
   const totalAdminsCount = onlyAdmins.length;
   const activeAdminsCount = onlyAdmins.filter((a) => a.status === "ACTIVE").length;
-  const inactiveAdminsCount = onlyAdmins.filter((a) => a.status === "INACTIVE" || a.status === "PENDING").length;
+  const inactiveAdminsCount = onlyAdmins.filter((a) => a.status === "INACTIVE").length;
 
   const validActiveCompanies = (companies || []).filter((c) => {
     if (!c || c.isActive === false || c.status === "INACTIVE") return false;
@@ -674,14 +687,14 @@ export default function UserManagementPage() {
     : users.filter((u) => u.role === "USER").length;
 
   const superAdminActiveUsersCount = superAdminValidUsers.filter((u) => u.status === "ACTIVE").length;
-  const superAdminInactiveUsersCount = superAdminValidUsers.filter((u) => u.status === "INACTIVE" || u.status === "PENDING").length;
+  const superAdminInactiveUsersCount = superAdminValidUsers.filter((u) => u.status === "INACTIVE").length;
 
   const adminRoleAdmins = users.filter((u) => u.role === "ADMIN" || u.role === "SUPER_ADMIN");
   const adminRoleUsers = users.filter((u) => u.role === "USER");
   const companyAdminCount = adminRoleAdmins.length;
   const companyUserCount = adminRoleUsers.length;
   const companyActiveMemberCount = users.filter((u) => u.status === "ACTIVE").length;
-  const companyInactiveMemberCount = users.filter((u) => u.status === "INACTIVE" || u.status === "PENDING").length;
+  const companyInactiveMemberCount = users.filter((u) => u.status === "INACTIVE").length;
 
   // ── Filters ────────────────────────────────────────────────────────────────
 
@@ -694,7 +707,7 @@ export default function UserManagementPage() {
         u.email.toLowerCase().includes(q) ||
         (u.phone || "").toLowerCase().includes(q) ||
         (u.company || u.department || "").toLowerCase().includes(q);
-      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : (u.status === "INACTIVE" || u.status === "PENDING"));
+      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : u.status === "INACTIVE");
       const matchComp = filterCompany === "ALL" || u.companyId === filterCompany || u.company === filterCompany;
       const matchRole =
         filterRole === "ALL" ||
@@ -727,7 +740,7 @@ export default function UserManagementPage() {
         const userCompMatch = (u.company || u.department || "").toLowerCase().includes(q);
         const userMatch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.phone || "").toLowerCase().includes(q) || userCompMatch;
         const matchSearch = adminMatch || userMatch;
-        const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : (u.status === "INACTIVE" || u.status === "PENDING"));
+        const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : u.status === "INACTIVE");
         const matchComp = filterCompany === "ALL" || u.companyId === filterCompany || u.company === filterCompany;
         const matchRole =
           filterRole === "ALL" ||
@@ -745,7 +758,7 @@ export default function UserManagementPage() {
       const adminCompMatch = (admin.company || admin.department || "").toLowerCase().includes(q);
       const adminMatch = !q || admin.name.toLowerCase().includes(q) || admin.email.toLowerCase().includes(q) || (admin.phone || "").toLowerCase().includes(q) || adminCompMatch;
       const matchCompanyFilter = filterCompany === "ALL" || admin.companyId === filterCompany || admin.company === filterCompany;
-      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? admin.status === "ACTIVE" : (admin.status === "INACTIVE" || admin.status === "PENDING"));
+      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? admin.status === "ACTIVE" : admin.status === "INACTIVE");
       return ((adminMatch && matchCompanyFilter) || admin.users.length > 0) && matchStatus;
     });
 
@@ -764,7 +777,7 @@ export default function UserManagementPage() {
       const creatorAdmin = adminGroups.find((a) => a.id === u.createdBy);
       const creatorMatch = creatorAdmin ? (creatorAdmin.name.toLowerCase().includes(q) || creatorAdmin.email.toLowerCase().includes(q) || (creatorAdmin.phone || "").toLowerCase().includes(q)) : false;
       const matchSearch = !q || compNameMatch || userCompMatch || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.phone || "").toLowerCase().includes(q) || creatorMatch;
-      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : (u.status === "INACTIVE" || u.status === "PENDING"));
+      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : u.status === "INACTIVE");
       return isComp && matchSearch && matchStatus;
     });
 
@@ -787,18 +800,16 @@ export default function UserManagementPage() {
   async function handleSoftDeleteUser(u: AppUser) {
     setActionLoading(true);
     try {
-      const token = localStorage.getItem("nexus-token");
       const res = await fetch(`/api/users/${u.id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      showToast(`User "${u.name}" deleted successfully`, "success");
+      if (!res.ok) throw new Error(data.error || "Failed to delete user");
+      toast.success(`User "${u.name}" deleted successfully`);
       setConfirmSoftDeleteUser(null);
       fetchData(true);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : "Error deleting user", "error");
+      toast.error(e instanceof Error ? e.message : "Error deleting user");
     } finally {
       setActionLoading(false);
     }
@@ -819,6 +830,7 @@ export default function UserManagementPage() {
     setFormRole("USER"); setFormStatus("ACTIVE"); setFormAdminId("");
     setGeneratedPassword("");
     setSetupLink("");
+    setFormErrors({});
     setModalMode("create");
   }
 
@@ -831,6 +843,7 @@ export default function UserManagementPage() {
     setFormStatus(u.status); setFormAdminId(u.createdBy || "");
     setGeneratedPassword("");
     setSetupLink("");
+    setFormErrors({});
     setModalMode("edit");
   }
 
@@ -844,18 +857,42 @@ export default function UserManagementPage() {
     setSelectedUser(null);
     setGeneratedPassword("");
     setSetupLink("");
+    setFormErrors({});
   }
 
   // ── Save User ──────────────────────────────────────────────────────────────
 
   async function handleSave() {
-    if (!formName.trim() || !formEmail.trim()) {
-      showToast("Name and email are required", "error");
+    const errors: Record<string, string> = {};
+    let isValid = true;
+
+    if (!formName.trim()) { errors['name'] = 'Full Name is required'; isValid = false; }
+    if (!formEmail.trim()) { errors['email'] = 'Email is required'; isValid = false; }
+    else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formEmail)) {
+        errors['email'] = 'Please enter a valid email address';
+        isValid = false;
+      }
+    }
+
+    if (formPhone && !/^\d{1,10}$/.test(formPhone)) {
+      errors['phone'] = 'Phone number must be numeric and up to 10 digits';
+      isValid = false;
+    }
+
+    setFormErrors(errors);
+
+    if (!isValid) {
+      toast.error("Please fix the errors in the form.");
+      if (errors['name']) document.getElementById("formName")?.focus();
+      else if (errors['email']) document.getElementById("formEmail")?.focus();
+      else if (errors['phone']) document.getElementById("formPhone")?.focus();
       return;
     }
+
     setFormSaving(true);
     try {
-      const token = localStorage.getItem("nexus-token");
       const matchedComp = companies.find((c) => c.id === formCompanyId);
       const finalCompanyVal = isSuperAdmin
         ? (matchedComp ? matchedComp.name : formCompanyName)
@@ -875,28 +912,31 @@ export default function UserManagementPage() {
       if (modalMode === "create") {
         const res = await fetch("/api/users", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to create user");
-        showToast(`User "${formName}" created successfully. Activation link sent to ${formEmail}`, "success");
+
+        setGeneratedPassword(data.generatedPassword || "");
+        setSetupLink(data.setupLink || "");
+        toast.success(`User "${formName}" created successfully. Activation link sent to ${formEmail}`);
         fetchData(true);
         closeModal();
       } else if (modalMode === "edit" && selectedUser) {
         const res = await fetch(`/api/users/${selectedUser.id}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to update user");
-        showToast(`User "${formName}" updated successfully`, "success");
+        toast.success(`User "${formName}" updated successfully`);
         fetchData(true);
         closeModal();
       }
     } catch (e) {
-      showToast(e instanceof Error ? e.message : "Error saving", "error");
+      toast.error(e instanceof Error ? e.message : "Error saving");
     } finally {
       setFormSaving(false);
     }
@@ -905,19 +945,18 @@ export default function UserManagementPage() {
   async function handleToggleStatus(u: AppUser) {
     setActionLoading(true);
     try {
-      const token = localStorage.getItem("nexus-token");
       const res = await fetch(`/api/users/${u.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "toggle-status" }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      showToast(`"${u.name}" status updated to ${data.isActive ? "ACTIVE" : "INACTIVE"}`, "success");
+      if (!res.ok) throw new Error(data.error || "Failed to toggle user status");
+      toast.success(`"${u.name}" status updated to ${data.isActive ? "ACTIVE" : "INACTIVE"}`);
       setConfirmToggleStatusUser(null);
       fetchData(true);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : "Error updating status", "error");
+      toast.error(e instanceof Error ? e.message : "Error updating status");
     } finally {
       setActionLoading(false);
     }
@@ -971,17 +1010,6 @@ export default function UserManagementPage() {
 
   return (
     <div className="space-y-6 text-nexus-text">
-
-      {/* Success confirmation shows as a centered popup; errors stay as a corner toast */}
-      {toast && toast.type === "success" && (
-        <SuccessPopup message={toast.msg} type="success" onClose={() => setToast(null)} />
-      )}
-      {toast && toast.type === "error" && (
-        <div className="fixed top-5 right-5 z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl border shadow-2xl text-sm font-semibold transition-all bg-red-900/80 border-red-500/40 text-red-300">
-          <IconX size={16} />
-          {toast.msg}
-        </div>
-      )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
@@ -1189,6 +1217,8 @@ export default function UserManagementPage() {
               onEdit={openEdit}
               onToggleStatus={(u) => setConfirmToggleStatusUser(u)}
               onSoftDelete={(u) => setConfirmSoftDeleteUser(u)}
+              onResendInvitation={handleResendInvitation}
+              showActions={true}
             />
           ))}
         </div>
@@ -1302,17 +1332,20 @@ export default function UserManagementPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Full Name *</label>
-                  <input value={formName} onChange={(e) => setFormName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text focus:outline-none focus:border-nexus-primary font-medium" />
+                  <input id="formName" value={formName} onChange={(e) => { setFormName(e.target.value); setFormErrors(p => ({ ...p, name: '' })); }}
+                    className={`w-full px-3 py-2 text-sm bg-nexus-bg border rounded-lg text-nexus-text focus:outline-none font-medium ${formErrors['name'] ? "border-red-500/50 focus:border-red-500/50" : "border-nexus-border focus:border-nexus-primary"
+                      }`} />
+                  {formErrors['name'] && <p className="text-[10px] text-red-400 mt-1 font-semibold">{formErrors['name']}</p>}
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Email *</label>
-                  <input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)}
+                  <input type="email" id="formEmail" value={formEmail} onChange={(e) => { setFormEmail(e.target.value); setFormErrors(p => ({ ...p, email: '' })); }}
                     readOnly={modalMode === "edit"}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg text-nexus-text focus:outline-none ${modalMode === "edit"
-                      ? "bg-nexus-hover border-nexus-border text-nexus-muted cursor-not-allowed font-medium"
-                      : "bg-nexus-bg border-nexus-border focus:border-nexus-primary font-medium"
+                    className={`w-full px-3 py-2 text-sm border rounded-lg text-nexus-text focus:outline-none font-medium ${modalMode === "edit"
+                      ? "bg-nexus-hover border-nexus-border text-nexus-muted cursor-not-allowed"
+                      : formErrors['email'] ? "bg-nexus-bg border-red-500/50 focus:border-red-500/50" : "bg-nexus-bg border-nexus-border focus:border-nexus-primary"
                       }`} />
+                  {formErrors['email'] && <p className="text-[10px] text-red-400 mt-1 font-semibold">{formErrors['email']}</p>}
                 </div>
               </div>
 
@@ -1321,25 +1354,24 @@ export default function UserManagementPage() {
                   <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Phone Number</label>
                   <input
                     type="text"
-                    inputMode="tel"
-                    maxLength={15}
+                    id="formPhone"
+                    inputMode="numeric"
+                    maxLength={10}
                     value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value.replace(/[^0-9+\-\s()]/g, "").slice(0, 15))}
-                    className="w-full px-3 py-2 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text focus:outline-none focus:border-nexus-primary font-mono tracking-wider"
+                    onChange={(e) => { setFormPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setFormErrors(p => ({ ...p, phone: '' })); }}
+                    className={`w-full px-3 py-2 text-sm bg-nexus-bg border rounded-lg text-nexus-text focus:outline-none font-mono tracking-wider ${formErrors['phone'] ? "border-red-500/50 focus:border-red-500/50" : "border-nexus-border focus:border-nexus-primary"
+                      }`}
                   />
+                  {formErrors['phone'] && <p className="text-[10px] text-red-400 mt-1 font-semibold">{formErrors['phone']}</p>}
                 </div>
 
-                {(!isSuperAdmin || modalMode === "create") && (
+                {modalMode === "create" && (
                   <div>
                     <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Role *</label>
                     <select
                       value={formRole}
                       onChange={(e) => setFormRole(e.target.value as "ADMIN" | "USER")}
-                      disabled={modalMode === "edit"}
-                      className={`w-full px-3 py-2 text-sm border rounded-lg text-nexus-text focus:outline-none ${modalMode === "edit"
-                        ? "bg-nexus-hover border-nexus-border text-nexus-muted cursor-not-allowed font-medium"
-                        : "bg-nexus-bg border-nexus-border focus:border-nexus-primary font-medium"
-                        }`}
+                      className="w-full px-3 py-2 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text focus:outline-none focus:border-nexus-primary font-medium"
                     >
                       {isSuperAdmin && <option value="SUPER_ADMIN">Super Admin</option>}
                       {(isSuperAdmin || (companies.find(c => c.id === (currentUser?.companyId || myAdminObj?.companyId || ""))?.ownerUserId === currentUser?.id)) && (

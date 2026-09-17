@@ -3,15 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { IconPlus, IconEdit, IconTrash, IconEye, IconEyeOff, IconCheck, IconX } from "@tabler/icons-react";
-import { SuccessPopup } from "@/components/common/SuccessPopup";
+import toast from "react-hot-toast";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 
 
 export default function PlansAdminPage() {
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const fetchPlans = async () => {
     setLoading(true);
@@ -23,7 +21,7 @@ export default function PlansAdminPage() {
       const data = await res.json();
       setPlans(data);
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -46,9 +44,9 @@ useEffect(() => {
       });
       if (!res.ok) throw new Error("Failed to update status");
       fetchPlans();
-      setSuccess(`Plan ${newStatus === "ACTIVE" ? "activated" : "deactivated"} successfully`);
+      toast.success(`Plan ${newStatus === "ACTIVE" ? "activated" : "deactivated"} successfully`);
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -64,9 +62,9 @@ useEffect(() => {
         throw new Error(data.error || "Failed to delete plan");
       }
       fetchPlans();
-      setSuccess("Plan deleted successfully");
+      toast.success("Plan deleted successfully");
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -87,8 +85,6 @@ useEffect(() => {
 
   return (
     <div className="space-y-6 text-nexus-text">
-      {success && <SuccessPopup message={success} type="success" onClose={() => setSuccess(null)} />}
-      {error && <SuccessPopup message={error} type="error" onClose={() => setError(null)} />}
 
       <div className="flex items-center justify-between">
         <div>

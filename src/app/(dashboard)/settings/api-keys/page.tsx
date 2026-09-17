@@ -15,6 +15,7 @@ import {
   IconAlertTriangle,
   IconLoader2,
 } from "@tabler/icons-react";
+import toast from "react-hot-toast";
 
 interface ApiKeyConfig {
   key: string;
@@ -30,8 +31,6 @@ export default function SettingsApiKeysPage() {
 
   const [keys, setKeys] = useState<ApiKeyConfig[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
 
   // Visibility map for masking/unmasking key values
   const [visibilityMap, setVisibilityMap] = useState<Record<string, boolean>>({});
@@ -45,7 +44,6 @@ export default function SettingsApiKeysPage() {
   const [valueInput, setValueInput] = useState("");
   const [labelInput, setLabelInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [modalError, setModalError] = useState("");
 
   // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -60,7 +58,6 @@ export default function SettingsApiKeysPage() {
 
   const fetchKeys = async () => {
     setIsLoading(true);
-    setError("");
     try {
       const res = await fetch("/api/settings/api-keys");
       if (!res.ok) {
@@ -69,7 +66,7 @@ export default function SettingsApiKeysPage() {
       const data = await res.json();
       setKeys(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred.");
+      toast.error(err instanceof Error ? err.message : "An error occurred.");
     } finally {
       setIsLoading(false);
     }
@@ -77,6 +74,7 @@ export default function SettingsApiKeysPage() {
 
   const handleCopy = (key: string, value: string) => {
     navigator.clipboard.writeText(value);
+    toast.success("Copied to clipboard");
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
   };
@@ -90,7 +88,6 @@ export default function SettingsApiKeysPage() {
     setKeyInput("");
     setValueInput("");
     setLabelInput("");
-    setModalError("");
     setShowModal(true);
   };
 
@@ -99,17 +96,15 @@ export default function SettingsApiKeysPage() {
     setKeyInput(item.key);
     setValueInput(item.value);
     setLabelInput(item.label || "");
-    setModalError("");
     setShowModal(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setModalError("");
     setIsSaving(true);
 
     if (!keyInput.trim() || !valueInput.trim()) {
-      setModalError("Key identifier and Value are required.");
+      toast.error("Key identifier and Value are required.");
       setIsSaving(false);
       return;
     }
@@ -130,12 +125,11 @@ export default function SettingsApiKeysPage() {
         throw new Error(data.error || "Failed to save API key.");
       }
 
-      setSuccessMsg(`Successfully saved API key: ${keyInput.toUpperCase()}`);
-      setTimeout(() => setSuccessMsg(""), 4000);
+      toast.success(`Successfully saved API key: ${keyInput.toUpperCase()}`);
       setShowModal(false);
       fetchKeys();
     } catch (err) {
-      setModalError(err instanceof Error ? err.message : "Failed to save API key.");
+      toast.error(err instanceof Error ? err.message : "Failed to save API key.");
     } finally {
       setIsSaving(false);
     }
@@ -158,13 +152,12 @@ export default function SettingsApiKeysPage() {
         throw new Error(data.error || "Failed to delete API key.");
       }
 
-      setSuccessMsg(`Successfully deleted API key: ${deleteTarget.key}`);
-      setTimeout(() => setSuccessMsg(""), 4000);
+      toast.success(`Successfully deleted API key: ${deleteTarget.key}`);
       setShowDeleteModal(false);
       setDeleteTarget(null);
       fetchKeys();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete API key.");
+      toast.error(err instanceof Error ? err.message : "Failed to delete API key.");
     } finally {
       setIsDeleting(false);
     }
@@ -194,17 +187,7 @@ export default function SettingsApiKeysPage() {
         </button>
       </div>
 
-      {successMsg && (
-        <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-xl px-4 py-3 text-xs text-emerald-400 font-semibold animate-in slide-in-from-top-2 duration-300">
-          {successMsg}
-        </div>
-      )}
 
-      {error && (
-        <div className="bg-red-500/15 border border-red-500/30 rounded-xl px-4 py-3 text-xs text-red-400 font-semibold animate-shake">
-          {error}
-        </div>
-      )}
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-3">
@@ -303,11 +286,7 @@ export default function SettingsApiKeysPage() {
 
             <form onSubmit={handleSave}>
               <div className="p-6 space-y-4">
-                {modalError && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-xs text-red-400 animate-shake">
-                    {modalError}
-                  </div>
-                )}
+
 
                 <div>
                   <label className="block text-xs font-semibold text-nexus-text-secondary mb-1.5">

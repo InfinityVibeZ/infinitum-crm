@@ -11,6 +11,7 @@ import {
   IconAlertCircle,
   IconLoader2,
 } from "@tabler/icons-react";
+import toast from "react-hot-toast";
 import { PASSWORD_REQUIREMENTS, getPasswordStrength } from "@/lib/passwordPolicy";
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -19,15 +20,13 @@ export default function SettingsSecurityPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [currentPasswordError, setCurrentPasswordError] = useState("");
 
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [currentPasswordError, setCurrentPasswordError] = useState("");
   const [touched, setTouched] = useState({ current: false, new: false, confirm: false });
 
   const strength = useMemo(() => getPasswordStrength(newPassword), [newPassword]);
@@ -44,29 +43,26 @@ export default function SettingsSecurityPage() {
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
-    setCurrentPasswordError("");
     setTouched({ current: true, new: true, confirm: true });
 
     if (!currentPassword) {
-      setCurrentPasswordError("Current password is required.");
+      toast.error("Current password is required.");
       return;
     }
     if (!newPassword || !confirmPassword) {
-      setError("All fields are required.");
+      toast.error("All fields are required.");
       return;
     }
     if (!allReqsMet) {
-      setError("New password does not meet all requirements.");
+      toast.error("New password does not meet all requirements.");
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError("New passwords do not match.");
+      toast.error("New passwords do not match.");
       return;
     }
     if (isNewSameAsCurrent) {
-      setError("New password must be different from your current password.");
+      toast.error("New password must be different from your current password.");
       return;
     }
 
@@ -85,21 +81,17 @@ export default function SettingsSecurityPage() {
       const data = await res.json();
       if (!res.ok) {
         const message = data.error || "Failed to update password";
-        if (/current password/i.test(message)) {
-          setCurrentPasswordError(message);
-        } else {
-          setError(message);
-        }
+        toast.error(message);
         return;
       }
 
-      setSuccess("Password changed successfully.");
+      toast.success("Password changed successfully.");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setTouched({ current: false, new: false, confirm: false });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update password");
+      toast.error(err instanceof Error ? err.message : "Failed to update password");
     } finally {
       setIsLoading(false);
     }
@@ -123,20 +115,6 @@ export default function SettingsSecurityPage() {
         onSubmit={handlePasswordChange}
         className="bg-nexus-card border border-nexus-border rounded-xl p-6 space-y-5 shadow-sm"
       >
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-xs font-semibold text-red-400 flex items-center gap-2 animate-in fade-in duration-200">
-            <IconAlertCircle size={16} className="flex-shrink-0" />
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-3 text-xs font-semibold text-emerald-400 flex items-center gap-2 animate-in fade-in duration-200">
-            <IconShieldCheck size={16} className="flex-shrink-0" />
-            {success}
-          </div>
-        )}
-
         <div className="space-y-4">
           {/* Current Password */}
           <div>
@@ -152,7 +130,7 @@ export default function SettingsSecurityPage() {
                 onBlur={() => setTouched((t) => ({ ...t, current: true }))}
                 placeholder="Enter current password"
                 className={`w-full pl-3 pr-10 py-2.5 text-sm bg-nexus-bg border rounded-lg text-nexus-text placeholder-nexus-muted focus:outline-none focus:border-nexus-primary ${
-                  currentPasswordError || isCurrentPasswordEmpty ? "border-red-500/50" : "border-nexus-border"
+                  isCurrentPasswordEmpty ? "border-red-500/50" : "border-nexus-border"
                 }`}
                 required
               />
@@ -164,10 +142,7 @@ export default function SettingsSecurityPage() {
                 {showCurrent ? <IconEyeOff size={16} /> : <IconEye size={16} />}
               </button>
             </div>
-            {currentPasswordError && (
-              <p className="text-[11px] text-red-400 mt-1">{currentPasswordError}</p>
-            )}
-            {!currentPasswordError && isCurrentPasswordEmpty && (
+            {isCurrentPasswordEmpty && (
               <p className="text-[11px] text-red-400 mt-1">Current password is required.</p>
             )}
           </div>

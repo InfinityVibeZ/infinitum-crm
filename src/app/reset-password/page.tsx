@@ -15,6 +15,7 @@ import {
   IconKey,
   IconClock,
 } from "@tabler/icons-react";
+import toast from "react-hot-toast";
 import { PASSWORD_REQUIREMENTS, getPasswordStrength } from "@/lib/passwordPolicy";
 
 export default function ResetPasswordPage() {
@@ -45,7 +46,6 @@ function ResetPasswordPageClient() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   // Pre-validate the token before showing the form — same pattern as Account Setup,
@@ -65,8 +65,6 @@ function ResetPasswordPageClient() {
           message: err.message || "This password reset link has expired or is no longer valid.",
           code: err.data?.code || "INVALID",
         });
-      } catch {
-        setLinkError({ message: "Failed to verify reset link. Please try again.", code: "INVALID" });
       } finally {
         setLoading(false);
       }
@@ -84,19 +82,18 @@ function ResetPasswordPageClient() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) {
-      setError("Reset token is missing from the link.");
+      toast.error("Reset token is missing from the link.");
       return;
     }
     if (!isFormValid || submitting) return;
 
     setSubmitting(true);
-    setError(null);
 
     try {
       await apiClient.post("/api/auth/reset-password", { token, password });
       setSuccess(true);
     } catch (err: any) {
-      setError(err.message || "An error occurred");
+      toast.error(err.message || "An error occurred");
     } finally {
       setSubmitting(false);
     }
@@ -187,12 +184,7 @@ function ResetPasswordPageClient() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
-              <div className="p-3 text-xs bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-300 flex items-start gap-2">
-                <IconAlertTriangle size={16} className="shrink-0 text-rose-400 mt-0.5" />
-                <span>{error}</span>
-              </div>
-            )}
+
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-nexus-text-secondary block">New Password *</label>

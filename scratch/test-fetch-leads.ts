@@ -4,7 +4,7 @@ import path from "path";
 async function testFetch() {
   try {
     // Make a request to the local API endpoint (we can test directly or test prisma directly)
-    const res = await fetch("http://localhost:3000/api/leads", {
+    const res = await fetch("https://localhost:3000/api/leads", {
       headers: {
         // test without auth or with a test request
       }

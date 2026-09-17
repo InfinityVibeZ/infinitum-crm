@@ -33,15 +33,53 @@ export async function GET(request: Request) {
       whereClause.status = "ACTIVE";
     }
 
+    let adminCompId: string | undefined;
+    let adminCompName: string | undefined;
+
+    if (payload.role !== "SUPER_ADMIN") {
+      const adminUser = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        select: { companyId: true, company: true, department: true }
+      });
+      adminCompId = (payload as any).companyId || adminUser?.companyId;
+      adminCompName = (payload as any).company || adminUser?.company || adminUser?.department;
+      
+      const orConditions: any[] = [];
+      if (adminCompId) orConditions.push({ id: adminCompId });
+      if (adminCompName) orConditions.push({ name: { equals: adminCompName, mode: "insensitive" } });
+      
+      if (orConditions.length > 0) {
+        whereClause.OR = orConditions;
+      } else {
+        // Fallback: match nothing if they have no company
+        whereClause.id = "invalid-no-company"; 
+      }
+    }
+
     // Fetch companies from database
     const companies = await (prisma as any).company.findMany({
       where: whereClause,
       orderBy: { updatedAt: "desc" },
     });
 
+    const usersWhereClause: any = { isDeleted: false };
+    if (payload.role !== "SUPER_ADMIN") {
+      const userOrConditions: any[] = [];
+      if (adminCompId) userOrConditions.push({ companyId: adminCompId });
+      if (adminCompName) {
+        userOrConditions.push({ company: { equals: adminCompName, mode: "insensitive" } });
+        userOrConditions.push({ department: { equals: adminCompName, mode: "insensitive" } });
+      }
+      if (userOrConditions.length > 0) {
+        usersWhereClause.OR = userOrConditions;
+      } else {
+        usersWhereClause.id = "invalid-no-company";
+      }
+    }
+
     // Fetch all active users to compute accurate company counts
     const allUsers = await prisma.user.findMany({
-      where: { isDeleted: false },
+      where: usersWhereClause,
       select: {
         id: true,
         name: true,

@@ -21,7 +21,7 @@ import {
   IconLoader2,
 } from "@tabler/icons-react";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
-import { SuccessPopup } from "@/components/common/SuccessPopup";
+import toast from "react-hot-toast";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -74,7 +74,6 @@ export default function CompanyManagementPage() {
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   // Form State
   const [showCompanyForm, setShowCompanyForm] = useState(false);
@@ -91,8 +90,11 @@ export default function CompanyManagementPage() {
   const [actionLoading, setActionLoading] = useState(false);
 
   function toast$(msg: string, type: "success" | "error") {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
+    if (type === "success") {
+      toast.success(msg);
+    } else {
+      toast.error(msg);
+    }
   }
 
   const token = () =>
@@ -242,17 +244,6 @@ export default function CompanyManagementPage() {
   return (
     <PermissionGuard roles={["SUPER_ADMIN"]}>
       <div className="space-y-6 text-nexus-text">
-
-        {/* Success confirmation shows as a centered popup; errors stay as a corner toast */}
-        {toast && toast.type === "success" && (
-          <SuccessPopup message={toast.msg} type="success" onClose={() => setToast(null)} />
-        )}
-        {toast && toast.type === "error" && (
-          <div className="fixed top-5 right-5 z-[60] flex items-center gap-3 px-4 py-3 rounded-xl border shadow-2xl text-sm font-semibold animate-in slide-in-from-top-2 bg-red-950/90 border-red-500/40 text-red-300">
-            <IconX size={16} />
-            {toast.msg}
-          </div>
-        )}
 
         {/* ── HEADER ───────────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">

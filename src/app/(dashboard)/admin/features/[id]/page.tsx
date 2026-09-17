@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { IconArrowLeft, IconDeviceFloppy, IconLoader2, IconSettings, IconShieldLock } from "@tabler/icons-react";
-import { SuccessPopup } from "@/components/common/SuccessPopup";
+import toast from "react-hot-toast";
 import { apiClient } from "@/lib/apiClient";
 
 function classNames(...classes: (string | undefined | null | false)[]) {
@@ -23,8 +23,7 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ id: s
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [feature, setFeature] = useState<any>({
     code: "",
@@ -52,7 +51,7 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ id: s
         const data = await apiClient.get(`/api/admin/features/${id}`);
         setFeature(data);
       } catch (err: any) {
-        setError(err.message);
+        toast.error(err.message);
       } finally {
         setLoading(false);
       }
@@ -60,10 +59,30 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ id: s
     loadData();
   }, [id, isNew]);
 
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {};
+    let isValid = true;
+    if (!feature.name.trim()) { errors['name'] = 'Feature Name is required'; isValid = false; }
+    if (!feature.code.trim()) { errors['code'] = 'Feature Code is required'; isValid = false; }
+    
+    setFieldErrors(errors);
+    if (!isValid) {
+      toast.error('Please fix the errors in the form.');
+      setTimeout(() => {
+        if (errors['name']) {
+          document.getElementById('feature-name')?.focus();
+        } else if (errors['code']) {
+          document.getElementById('feature-code')?.focus();
+        }
+      }, 50);
+    }
+    return isValid;
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validate()) return;
     setSaving(true);
-    setError(null);
     try {
       const url = isNew ? "/api/admin/features" : `/api/admin/features/${id}`;
       const method = isNew ? "POST" : "PATCH"; // Using PATCH correctly
@@ -71,14 +90,14 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ id: s
       const data = await (method === "POST" ? apiClient.post(url, feature) : apiClient.patch(url, feature));
 
       setSaving(false);
-      setSuccess("Feature saved successfully!");
+      toast.success("Feature saved successfully!");
       if (isNew && data?.id) {
         // We will wait for the user to close the success modal, so we'll just leave it.
         // Or we can smoothly redirect without forcing a modal close:
         setTimeout(() => router.push(`/admin/features/${data.id}`), 1000);
       }
     } catch (err: any) {
-      setError(err.message);
+      toast.error(err.message);
       setSaving(false);
     }
   };
@@ -93,13 +112,6 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="text-nexus-text">
-      {success && <SuccessPopup message={success} type="success" onClose={() => {
-        setSuccess(null);
-        if (!isNew) {
-          router.push('/admin/features');
-        }
-      }} />}
-      {error && <SuccessPopup message={error} type="error" onClose={() => setError(null)} />}
 
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
@@ -149,27 +161,32 @@ export default function FeatureDetailsPage({ params }: { params: Promise<{ id: s
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-nexus-text-secondary">Feature Name *</label>
                 <input
+                  id="feature-name"
                   type="text"
                   required
                   value={feature.name}
-                  onChange={(e) => setFeature({ ...feature, name: e.target.value })}
+                  onChange={(e) => { setFeature({ ...feature, name: e.target.value }); setFieldErrors(p => ({ ...p, name: '' })); }}
                   placeholder="e.g. Advanced Analytics"
-                  className="w-full bg-nexus-bg border border-nexus-border rounded-xl px-4 py-2.5 text-sm focus:border-nexus-primary focus:outline-none focus:ring-1 focus:ring-nexus-primary/50 transition-all"
+                  className={classNames(
+                    "w-full bg-nexus-bg border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-nexus-primary/50 transition-all",
+                    fieldErrors['name'] ? "border-red-500/50 focus:border-red-500/50" : "border-nexus-border focus:border-nexus-primary"
+                  )}
                 />
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-nexus-text-secondary">Feature Code *</label>
                 <input
+                  id="feature-code"
                   type="text"
                   required
                   value={feature.code}
-                  onChange={(e) => setFeature({ ...feature, code: e.target.value.toUpperCase() })}
+                  onChange={(e) => { setFeature({ ...feature, code: e.target.value.toUpperCase() }); setFieldErrors(p => ({ ...p, code: '' })); }}
                   className={classNames(
                     "w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none uppercase font-mono transition-all",
                     !isNew 
                       ? "bg-black/20 border-nexus-border/50 text-nexus-muted cursor-not-allowed" 
-                      : "bg-nexus-bg border-nexus-border focus:border-nexus-primary focus:ring-1 focus:ring-nexus-primary/50"
+                      : fieldErrors['code'] ? "bg-nexus-bg border-red-500/50 focus:border-red-500/50 focus:ring-1 focus:ring-nexus-primary/50" : "bg-nexus-bg border-nexus-border focus:border-nexus-primary focus:ring-1 focus:ring-nexus-primary/50"
                   )}
                   disabled={!isNew}
                   placeholder="ADVANCED_ANALYTICS"

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -34,11 +34,13 @@ export async function GET() {
       prices: plan.prices.map((price) => ({
         id: price.id,
         amount: price.amount.toNumber(), // Decimal -> number
+        originalAmount: price.originalAmount ? price.originalAmount.toNumber() : null,
+        discountAmount: price.discountAmount ? price.discountAmount.toNumber() : null,
+        discountPercent: price.discountPercent ? price.discountPercent.toNumber() : null,
         currency: price.currency,
         billingInterval: price.billingInterval,
-        billingIntervalCount: price.billingIntervalCount,
+        intervalCount: price.intervalCount,
         isActive: price.isActive,
-        // any other fields you deem safe
       })),
       // optional: expose feature ids/names
       features: plan.features.map((pf) => ({

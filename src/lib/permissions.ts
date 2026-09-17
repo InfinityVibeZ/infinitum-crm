@@ -10,6 +10,11 @@ export type AppRole = "SUPER_ADMIN" | "ADMIN" | "USER";
 
 export const DEFAULT_PAGE_PERMISSIONS: Record<string, Record<AppRole, boolean>> = {
   "/leads/crm": { SUPER_ADMIN: true, ADMIN: true, USER: true },
+  "/contacts": { SUPER_ADMIN: true, ADMIN: true, USER: true },
+  "/attribution": { SUPER_ADMIN: true, ADMIN: true, USER: false },
+  "/settings/assignment-rules": { SUPER_ADMIN: true, ADMIN: true, USER: false },
+  "/settings/team": { SUPER_ADMIN: true, ADMIN: true, USER: false },
+  "/settings/subscription": { SUPER_ADMIN: true, ADMIN: true, USER: false },
   "/leads/metrics": { SUPER_ADMIN: true, ADMIN: true, USER: true },
   "/leads/activities": { SUPER_ADMIN: true, ADMIN: true, USER: true },
 
@@ -45,8 +50,10 @@ export const DEFAULT_PAGE_PERMISSIONS: Record<string, Record<AppRole, boolean>> 
   "/admin/audit-logs": { SUPER_ADMIN: true, ADMIN: true, USER: false },
 
   "/settings/security": { SUPER_ADMIN: true, ADMIN: true, USER: true },
+  "/settings/integrations": { SUPER_ADMIN: true, ADMIN: true, USER: false },
   "/admin/permissions": { SUPER_ADMIN: true, ADMIN: false, USER: false },
   "/settings/api-keys": { SUPER_ADMIN: true, ADMIN: false, USER: false },
+  "/inbox": { SUPER_ADMIN: true, ADMIN: true, USER: true },
 };
 
 /** Flattens the path->role->bool matrix down to a single role's path->bool map. */

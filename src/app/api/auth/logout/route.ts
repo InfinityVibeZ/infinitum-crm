@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
-import { extractTokenFromRequest, getTokenPayload, requireAuthenticatedUser } from "@/lib/auth";
+import { extractTokenFromRequest, getTokenPayload } from "@/lib/auth";
 import { logAuditEvent, getIpFromRequest } from "@/lib/audit";
 import { clearSession } from "@/lib/session-limit";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
   const ip = getIpFromRequest(request);
 
-  // Try to identify who is logging out for the audit trail
   try {
     const token = extractTokenFromRequest(request);
+    let payload = null;
     if (token) {
-      const payload = getTokenPayload(token);
+      payload = getTokenPayload(token);
       if (payload) {
         await logAuditEvent({
           action:    "USER_LOGOUT",
@@ -23,8 +25,36 @@ export async function POST(request: Request) {
           summary:   `${payload.name || payload.email} logged out of the system`,
           ipAddress: ip,
         });
-        // Free this user's slot immediately rather than waiting for the idle window to expire.
         await clearSession(payload.userId);
+      }
+    }
+
+    // Revoke the refresh token in the DB session if possible
+    const cookieHeader = request.headers.get("cookie");
+    let currentRefreshToken = null;
+    if (cookieHeader) {
+      const cookies = Object.fromEntries(
+        cookieHeader.split("; ").map(c => {
+          const [k, v] = c.split("=");
+          return [k, decodeURIComponent(v)];
+        })
+      );
+      currentRefreshToken = cookies["nexus-refresh-token"];
+    }
+
+    if (currentRefreshToken && payload?.userId) {
+      const activeSessions = await prisma.session.findMany({
+        where: { userId: payload.userId, revokedAt: null }
+      });
+      for (const session of activeSessions) {
+        const isMatch = await bcrypt.compare(currentRefreshToken, session.refreshTokenHash);
+        if (isMatch) {
+          await prisma.session.update({
+            where: { id: session.id },
+            data: { revokedAt: new Date() }
+          });
+          break;
+        }
       }
     }
   } catch {
@@ -33,31 +63,12 @@ export async function POST(request: Request) {
 
   const response = NextResponse.json({ success: true });
 
-  // Clear the auth token cookie
-  response.cookies.set("nexus-token", "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
-  });
-
-  response.cookies.set("nexus-role", "", {
-    httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
-  });
-
-  // Also clear the client-side permissions cookie
-  response.cookies.set("nexus-role-permissions", "", {
-    httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
-  });
+  // Clear auth cookies using the correct Next.js delete method
+  response.cookies.delete("nexus-access-token");
+  response.cookies.delete("nexus-refresh-token");
+  response.cookies.delete("nexus-token");
+  response.cookies.delete("nexus-role");
+  response.cookies.delete("nexus-role-permissions");
 
   return response;
 }

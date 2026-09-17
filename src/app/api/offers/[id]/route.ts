@@ -1,20 +1,30 @@
-import { hasFeature } from "@/lib/subscription";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const resolvedParams = await params;
+
   try {
     const offer = await prisma.offer.findUnique({
-      where: { id: resolvedParams.id },
+      where: {
+        id: resolvedParams.id,
+      },
     });
+
     if (!offer) {
-      return NextResponse.json({ error: "Offer not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Offer not found" },
+        { status: 404 }
+      );
     }
+
     return NextResponse.json(offer);
   } catch (error) {
     console.error("GET /api/offers/[id] error:", error);
+
     return NextResponse.json(
       { error: "Failed to fetch offer" },
       { status: 500 }
@@ -22,96 +32,197 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const resolvedParams = await params;
+
   try {
     const body = await request.json();
-    const { name, price, description, category, status, features, isBookmarked } = body;
+
+    const {
+      name,
+      title,
+      description,
+      status,
+      content,
+    } = body;
+
+    /*
+     * Current Prisma Offer model:
+     * - title
+     * - description
+     * - content
+     * - status
+     * - created_by
+     *
+     * There are no separate name/price/category/features/
+     * isBookmarked columns.
+     */
 
     const offer = await prisma.offer.update({
-      where: { id: resolvedParams.id },
+      where: {
+        id: resolvedParams.id,
+      },
+
       data: {
-        ...(name && { name }),
-        ...(price !== undefined && { price: parseFloat(price.toString()) }),
-        ...(description !== undefined && { description }),
-        ...(category && { category }),
-        ...(status && { status }),
-        ...(features !== undefined && { features }),
-        ...(isBookmarked !== undefined && { isBookmarked }),
+        ...(title !== undefined && {
+          title,
+        }),
+
+        // Keep compatibility with callers still sending `name`.
+        ...(title === undefined &&
+          name !== undefined && {
+          title: name,
+        }),
+
+        ...(description !== undefined && {
+          description,
+        }),
+
+        ...(status !== undefined && {
+          status,
+        }),
+
+        ...(content !== undefined && {
+          content,
+        }),
       },
     });
 
     return NextResponse.json(offer);
   } catch (error: any) {
     console.error("PUT /api/offers/[id] error:", error);
+
     return NextResponse.json(
-      { error: error?.message || "Failed to update offer" },
+      {
+        error:
+          error?.message || "Failed to update offer",
+      },
       { status: 500 }
     );
   }
 }
 
-
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const resolvedParams = await params;
+
   try {
     const body = await request.json();
 
+    /*
+     * Bookmark functionality is not supported by the current
+     * Prisma Offer model because there is no isBookmarked field.
+     */
     if (body.action === "TOGGLE_BOOKMARK") {
-      const current = await prisma.offer.findUnique({
-        where: { id: resolvedParams.id },
-        select: { isBookmarked: true },
-      });
-      const offer = await prisma.offer.update({
-        where: { id: resolvedParams.id },
-        data: { isBookmarked: !current?.isBookmarked },
-      });
-      return NextResponse.json(offer);
+      return NextResponse.json(
+        {
+          error:
+            "Bookmark functionality is not supported by the current Offer model",
+        },
+        { status: 400 }
+      );
     }
 
     if (body.action === "DUPLICATE") {
       const original = await prisma.offer.findUnique({
-        where: { id: resolvedParams.id },
-      });
-      if (!original) {
-        return NextResponse.json({ error: "Offer not found" }, { status: 404 });
-      }
-      const duplicate = await prisma.offer.create({
-        data: {
-          name: `${original.name} (Copy)`,
-          price: original.price,
-          category: original.category,
-          status: original.status,
-          description: original.description,
-          features: original.features || [],
+        where: {
+          id: resolvedParams.id,
         },
       });
-      return NextResponse.json(duplicate, { status: 201 });
+
+      if (!original) {
+        return NextResponse.json(
+          { error: "Offer not found" },
+          { status: 404 }
+        );
+      }
+
+      const duplicate = await prisma.offer.create({
+        data: {
+          title: `${original.title} (Copy)`,
+          description: original.description,
+          content:
+            original.content === null
+              ? undefined
+              : original.content,
+          status: original.status,
+          created_by: original.created_by,
+        },
+      });
+
+      return NextResponse.json(
+        duplicate,
+        { status: 201 }
+      );
     }
 
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
-    console.error("PATCH /api/offers/[id] error:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to update offer" },
+      { error: "Invalid action" },
+      { status: 400 }
+    );
+  } catch (error: any) {
+    console.error(
+      "PATCH /api/offers/[id] error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          error?.message ||
+          "Failed to update offer",
+      },
       { status: 500 }
     );
   }
 }
 
-
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const resolvedParams = await params;
+
   try {
-    await prisma.offer.delete({
-      where: { id: resolvedParams.id },
+    const existingOffer = await prisma.offer.findUnique({
+      where: {
+        id: resolvedParams.id,
+      },
     });
-    return NextResponse.json({ success: true });
+
+    if (!existingOffer) {
+      return NextResponse.json(
+        { error: "Offer not found" },
+        { status: 404 }
+      );
+    }
+
+    await prisma.offer.delete({
+      where: {
+        id: resolvedParams.id,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+    });
   } catch (error: any) {
-    console.error("DELETE /api/offers/[id] error:", error);
+    console.error(
+      "DELETE /api/offers/[id] error:",
+      error
+    );
+
     return NextResponse.json(
-      { error: error?.message || "Failed to delete offer" },
+      {
+        error:
+          error?.message ||
+          "Failed to delete offer",
+      },
       { status: 500 }
     );
   }

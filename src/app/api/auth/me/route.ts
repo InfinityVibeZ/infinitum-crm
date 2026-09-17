@@ -69,17 +69,39 @@ export async function GET(request: Request) {
         return NextResponse.json(
           {
             error: "DEACTIVATED",
-            message: `You don't have access to this portal or application. Please contact the ${targetTeamName} team.`,
           },
-          { status: 403 }
+          { status: 401 }
         );
       }
     }
 
     const isSuper = user.role === "SUPER_ADMIN";
-    const companyName = isSuper ? "" : (user.company || user.companyRef?.name || user.department || "");
-    const companyIdVal = isSuper ? "" : (user.companyId || user.companyRef?.id || "");
-    const categoryVal = isSuper ? "" : (user.category || user.companyRef?.category || "");
+    const companyName = user.company || user.companyRef?.name || user.department || "";
+    const companyIdVal = user.companyId || user.companyRef?.id || "";
+    const categoryVal = user.category || user.companyRef?.category || "";
+
+    let planName = "";
+    let isOwner = false;
+
+    if (companyIdVal) {
+      const company = await prisma.company.findUnique({
+        where: { id: companyIdVal },
+      });
+
+      if (company) {
+        if (company.ownerUserId === user.id) {
+          isOwner = true;
+        }
+      }
+
+      const sub = await prisma.subscription.findUnique({
+        where: { companyId: companyIdVal },
+        include: { plan: true },
+      });
+      if (sub && sub.plan) {
+        planName = sub.plan.name;
+      }
+    }
 
     // Fire-and-forget heartbeat (internally throttled) — this endpoint is polled every
     // 5s by IdleTimerGuard, so we never want it waiting on this write.
@@ -93,10 +115,12 @@ export async function GET(request: Request) {
         role: user.role,
         status: user.status,
         isActive: user.isActive,
+        isOwner: isOwner,
         company: companyName,
         companyId: companyIdVal,
         department: isSuper ? "" : (user.department || companyName),
         category: categoryVal,
+        planName: planName,
         phone: user.phone || "",
       },
     });

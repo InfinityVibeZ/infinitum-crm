@@ -21,26 +21,14 @@ export async function POST(request: Request) {
       include: { companyRef: true },
     });
 
-    if (!user || user.isDeleted) {
-      return NextResponse.json(
-        { error: "You don't have an account with this email address." },
-        { status: 404 }
-      );
+    if (!user || user.isDeleted || !user.isActive || user.status === "INACTIVE") {
+      // User enumeration protection: pretend we sent it
+      return NextResponse.json({ message: "If an account exists for this email, a secure password reset link has been sent." });
     }
 
-    if (!user.isActive || user.status === "INACTIVE") {
-      return NextResponse.json(
-        { error: "This account is inactive. Please contact your team admin." },
-        { status: 403 }
-      );
-    }
-
-    // Generate secure 24-hour PASSWORD_RESET token
-    const companyId = user.companyId || user.companyRef?.id;
+    // Generate secure 30-minute PASSWORD_RESET token
     const { rawToken } = await createPasswordResetToken({
       userId: user.id,
-      companyId,
-      role: user.role,
     });
 
     // Determine base URL
@@ -75,7 +63,7 @@ export async function POST(request: Request) {
       summary: `Password reset requested for registered email`,
     });
 
-    return NextResponse.json({ message: `A secure password reset link has been sent to ${user.email}.` });
+    return NextResponse.json({ message: "If an account exists for this email, a secure password reset link has been sent." });
   } catch (error) {
     console.error("Forgot password error:", error);
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });

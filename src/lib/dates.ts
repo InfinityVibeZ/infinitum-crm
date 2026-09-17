@@ -23,13 +23,6 @@ export function calculateNextPeriod(startDate: Date, interval: BillingInterval):
     case "YEAR":
       nextDate = addYears(startDate, 1);
       break;
-    case "WEEK":
-      // Fallback for weekly if used
-      nextDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-      return nextDate; // no end of month logic for weeks
-    case "DAY":
-      nextDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
-      return nextDate; // no end of month logic for days
     default:
       nextDate = addMonths(startDate, 1);
       break;
