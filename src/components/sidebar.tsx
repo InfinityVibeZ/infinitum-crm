@@ -230,17 +230,29 @@ export function Sidebar({
           }
 
           const dbAccess = activePermissions[item.href];
-          const pageAccess = dbAccess !== undefined ? dbAccess : DEFAULT_PERMISSIONS[item.href];
+          const pageAccess =
+            dbAccess !== undefined
+              ? dbAccess
+              : DEFAULT_PERMISSIONS[item.href];
 
-          if (pageAccess !== undefined && pageAccess !== null) {
-            if (typeof pageAccess === "boolean") {
-              // Cookie format: { "/path": true }
-              return pageAccess;
-            }
-            // API format: { "/path": { "ADMIN": true } }
-            return pageAccess[role] === true;
+          if (pageAccess === undefined || pageAccess === null) {
+            return role === "SUPER_ADMIN";
           }
-          // If no permission rule exists, default to false for non-superadmins
+
+          if (typeof pageAccess === "boolean") {
+            // Cookie format:
+            // { "/path": true }
+            return pageAccess;
+          }
+
+          if (typeof pageAccess === "object") {
+            // API format:
+            // { "/path": { "ADMIN": true, "USER": true } }
+            return (
+              (pageAccess as Record<string, boolean>)[role] === true
+            );
+          }
+
           return role === "SUPER_ADMIN";
         });
 

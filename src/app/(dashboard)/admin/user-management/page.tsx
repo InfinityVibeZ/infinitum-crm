@@ -127,7 +127,7 @@ function UserRow({
   onResendInvitation?: (u: AppUser) => void;
 }) {
   const roleBadge = ROLE_BADGE[u.role] ?? ROLE_BADGE.USER;
-  const statusBadge = (u.status as string) === "PENDING" && u.isInvitationExpired
+  const statusBadge = u.isInvitationExpired
     ? STATUS_BADGE.EXPIRED
     : STATUS_BADGE[u.status] ?? STATUS_BADGE.ACTIVE;
   const isMe = u.id === currentUserId;
@@ -217,7 +217,7 @@ function UserRow({
               <button onClick={() => onEdit(u)} className="p-1.5 rounded-md text-nexus-muted hover:text-nexus-primary hover:bg-nexus-primary/10 transition-colors" title="Edit">
                 <IconEdit size={14} />
               </button>
-              {(u.status as string) === "PENDING" && onResendInvitation && (
+              {u.isInvitationExpired && onResendInvitation && (
                 <button
                   onClick={() => onResendInvitation(u)}
                   className="p-1.5 rounded-md text-amber-400 hover:bg-amber-500/10 transition-colors"
@@ -273,7 +273,7 @@ function UserRow({
 // ─── Admin Row (Flat) ─────────────────────────────────────────────────────────
 
 function AdminRow({
-  admin, currentUserId, onView, onEdit, onToggleStatus, onSoftDelete, showActions = true, isTargetOwner = false,
+  admin, currentUserId, onView, onEdit, onToggleStatus, onSoftDelete, onResendInvitation, showActions = true, isTargetOwner = false,
 }: {
   admin: AppUser;
   currentUserId?: string;
@@ -283,6 +283,7 @@ function AdminRow({
   onEdit: (u: AppUser) => void;
   onToggleStatus: (u: AppUser) => void;
   onSoftDelete: (u: AppUser) => void;
+  onResendInvitation?: (u: AppUser) => void;
 }) {
   const statusBadge = STATUS_BADGE[admin.status] ?? STATUS_BADGE.ACTIVE;
   const roleBadge = ROLE_BADGE[admin.role] ?? ROLE_BADGE.ADMIN;
@@ -379,7 +380,14 @@ function CompanyAccordionCard({
   onResendInvitation,
   showActions = false,
 }: {
-  company: { id: string; name: string; category?: string; status?: string; isActive?: boolean };
+  company: {
+    id: string;
+    name: string;
+    category?: string;
+    status?: string;
+    isActive?: boolean;
+    ownerUserId?: string;
+  };
   admins: AppUser[];
   directUsers: AppUser[];
   currentUserId?: string;
@@ -601,7 +609,7 @@ export default function UserManagementPage() {
     }
   }
 
-  const [myAdminAccount, setMyAdminAccount] = useState<{ isActive: boolean; status: string } | null>(null);
+  const [myAdminAccount, setMyAdminAccount] = useState<{ isActive: boolean; status: string; companyId?: string; company?: string } | null>(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -658,7 +666,7 @@ export default function UserManagementPage() {
   const onlyAdmins = adminGroups.filter((a) => a.role === "ADMIN");
   const totalAdminsCount = onlyAdmins.length;
   const activeAdminsCount = onlyAdmins.filter((a) => a.status === "ACTIVE").length;
-  const inactiveAdminsCount = onlyAdmins.filter((a) => a.status === "INACTIVE" || a.status === "PENDING").length;
+  const inactiveAdminsCount = onlyAdmins.filter((a) => a.status === "INACTIVE").length;
 
   const validActiveCompanies = (companies || []).filter((c) => {
     if (!c || c.isActive === false || c.status === "INACTIVE") return false;
@@ -679,14 +687,14 @@ export default function UserManagementPage() {
     : users.filter((u) => u.role === "USER").length;
 
   const superAdminActiveUsersCount = superAdminValidUsers.filter((u) => u.status === "ACTIVE").length;
-  const superAdminInactiveUsersCount = superAdminValidUsers.filter((u) => u.status === "INACTIVE" || u.status === "PENDING").length;
+  const superAdminInactiveUsersCount = superAdminValidUsers.filter((u) => u.status === "INACTIVE").length;
 
   const adminRoleAdmins = users.filter((u) => u.role === "ADMIN" || u.role === "SUPER_ADMIN");
   const adminRoleUsers = users.filter((u) => u.role === "USER");
   const companyAdminCount = adminRoleAdmins.length;
   const companyUserCount = adminRoleUsers.length;
   const companyActiveMemberCount = users.filter((u) => u.status === "ACTIVE").length;
-  const companyInactiveMemberCount = users.filter((u) => u.status === "INACTIVE" || u.status === "PENDING").length;
+  const companyInactiveMemberCount = users.filter((u) => u.status === "INACTIVE").length;
 
   // ── Filters ────────────────────────────────────────────────────────────────
 
@@ -699,7 +707,7 @@ export default function UserManagementPage() {
         u.email.toLowerCase().includes(q) ||
         (u.phone || "").toLowerCase().includes(q) ||
         (u.company || u.department || "").toLowerCase().includes(q);
-      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : (u.status === "INACTIVE" || u.status === "PENDING"));
+      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : u.status === "INACTIVE");
       const matchComp = filterCompany === "ALL" || u.companyId === filterCompany || u.company === filterCompany;
       const matchRole =
         filterRole === "ALL" ||
@@ -732,7 +740,7 @@ export default function UserManagementPage() {
         const userCompMatch = (u.company || u.department || "").toLowerCase().includes(q);
         const userMatch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.phone || "").toLowerCase().includes(q) || userCompMatch;
         const matchSearch = adminMatch || userMatch;
-        const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : (u.status === "INACTIVE" || u.status === "PENDING"));
+        const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : u.status === "INACTIVE");
         const matchComp = filterCompany === "ALL" || u.companyId === filterCompany || u.company === filterCompany;
         const matchRole =
           filterRole === "ALL" ||
@@ -750,7 +758,7 @@ export default function UserManagementPage() {
       const adminCompMatch = (admin.company || admin.department || "").toLowerCase().includes(q);
       const adminMatch = !q || admin.name.toLowerCase().includes(q) || admin.email.toLowerCase().includes(q) || (admin.phone || "").toLowerCase().includes(q) || adminCompMatch;
       const matchCompanyFilter = filterCompany === "ALL" || admin.companyId === filterCompany || admin.company === filterCompany;
-      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? admin.status === "ACTIVE" : (admin.status === "INACTIVE" || admin.status === "PENDING"));
+      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? admin.status === "ACTIVE" : admin.status === "INACTIVE");
       return ((adminMatch && matchCompanyFilter) || admin.users.length > 0) && matchStatus;
     });
 
@@ -769,7 +777,7 @@ export default function UserManagementPage() {
       const creatorAdmin = adminGroups.find((a) => a.id === u.createdBy);
       const creatorMatch = creatorAdmin ? (creatorAdmin.name.toLowerCase().includes(q) || creatorAdmin.email.toLowerCase().includes(q) || (creatorAdmin.phone || "").toLowerCase().includes(q)) : false;
       const matchSearch = !q || compNameMatch || userCompMatch || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.phone || "").toLowerCase().includes(q) || creatorMatch;
-      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : (u.status === "INACTIVE" || u.status === "PENDING"));
+      const matchStatus = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? u.status === "ACTIVE" : u.status === "INACTIVE");
       return isComp && matchSearch && matchStatus;
     });
 
@@ -885,7 +893,6 @@ export default function UserManagementPage() {
 
     setFormSaving(true);
     try {
-      const token = localStorage.getItem("nexus-token");
       const matchedComp = companies.find((c) => c.id === formCompanyId);
       const finalCompanyVal = isSuperAdmin
         ? (matchedComp ? matchedComp.name : formCompanyName)
@@ -910,7 +917,7 @@ export default function UserManagementPage() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to create user");
-        
+
         setGeneratedPassword(data.generatedPassword || "");
         setSetupLink(data.setupLink || "");
         toast.success(`User "${formName}" created successfully. Activation link sent to ${formEmail}`);
@@ -1003,17 +1010,6 @@ export default function UserManagementPage() {
 
   return (
     <div className="space-y-6 text-nexus-text">
-
-      {/* Success confirmation shows as a centered popup; errors stay as a corner toast */}
-      {toast && toast.type === "success" && (
-        <SuccessPopup message={toast.msg} type="success" onClose={() => setToast(null)} />
-      )}
-      {toast && toast.type === "error" && (
-        <div className="fixed top-5 right-5 z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl border shadow-2xl text-sm font-semibold transition-all bg-red-900/80 border-red-500/40 text-red-300">
-          <IconX size={16} />
-          {toast.msg}
-        </div>
-      )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
@@ -1337,9 +1333,8 @@ export default function UserManagementPage() {
                 <div>
                   <label className="text-xs font-semibold text-nexus-text-secondary mb-1 block">Full Name *</label>
                   <input id="formName" value={formName} onChange={(e) => { setFormName(e.target.value); setFormErrors(p => ({ ...p, name: '' })); }}
-                    className={`w-full px-3 py-2 text-sm bg-nexus-bg border rounded-lg text-nexus-text focus:outline-none font-medium ${
-                      formErrors['name'] ? "border-red-500/50 focus:border-red-500/50" : "border-nexus-border focus:border-nexus-primary"
-                    }`} />
+                    className={`w-full px-3 py-2 text-sm bg-nexus-bg border rounded-lg text-nexus-text focus:outline-none font-medium ${formErrors['name'] ? "border-red-500/50 focus:border-red-500/50" : "border-nexus-border focus:border-nexus-primary"
+                      }`} />
                   {formErrors['name'] && <p className="text-[10px] text-red-400 mt-1 font-semibold">{formErrors['name']}</p>}
                 </div>
                 <div>
@@ -1364,9 +1359,8 @@ export default function UserManagementPage() {
                     maxLength={10}
                     value={formPhone}
                     onChange={(e) => { setFormPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setFormErrors(p => ({ ...p, phone: '' })); }}
-                    className={`w-full px-3 py-2 text-sm bg-nexus-bg border rounded-lg text-nexus-text focus:outline-none font-mono tracking-wider ${
-                      formErrors['phone'] ? "border-red-500/50 focus:border-red-500/50" : "border-nexus-border focus:border-nexus-primary"
-                    }`}
+                    className={`w-full px-3 py-2 text-sm bg-nexus-bg border rounded-lg text-nexus-text focus:outline-none font-mono tracking-wider ${formErrors['phone'] ? "border-red-500/50 focus:border-red-500/50" : "border-nexus-border focus:border-nexus-primary"
+                      }`}
                   />
                   {formErrors['phone'] && <p className="text-[10px] text-red-400 mt-1 font-semibold">{formErrors['phone']}</p>}
                 </div>
@@ -1377,11 +1371,7 @@ export default function UserManagementPage() {
                     <select
                       value={formRole}
                       onChange={(e) => setFormRole(e.target.value as "ADMIN" | "USER")}
-                      disabled={modalMode === "edit"}
-                      className={`w-full px-3 py-2 text-sm border rounded-lg text-nexus-text focus:outline-none ${modalMode === "edit"
-                        ? "bg-nexus-hover border-nexus-border text-nexus-muted cursor-not-allowed font-medium"
-                        : "bg-nexus-bg border-nexus-border focus:border-nexus-primary font-medium"
-                        }`}
+                      className="w-full px-3 py-2 text-sm bg-nexus-bg border border-nexus-border rounded-lg text-nexus-text focus:outline-none focus:border-nexus-primary font-medium"
                     >
                       {isSuperAdmin && <option value="SUPER_ADMIN">Super Admin</option>}
                       {(isSuperAdmin || (companies.find(c => c.id === (currentUser?.companyId || myAdminObj?.companyId || ""))?.ownerUserId === currentUser?.id)) && (

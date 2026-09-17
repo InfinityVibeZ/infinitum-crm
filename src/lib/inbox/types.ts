@@ -85,6 +85,15 @@ export interface NormalizedInboxEvent {
   /** Provider-issued external sender ID (e.g. PSID for Meta). */
   externalSenderId: string;
 
+  /** Provider-issued sender identifier used by the inbox pipeline. */
+  senderExternalId?: string;
+
+  /** Provider-issued recipient identifier, when available. */
+  recipientExternalId?: string;
+
+  /** Provider-specific normalized message type. */
+  messageType?: string;
+
   /** Message direction relative to the business. */
   direction: MessageDirection;
 

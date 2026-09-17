@@ -45,11 +45,15 @@ export async function PUT(request: NextRequest) {
     // 1. SUPER_ADMIN ONLY
     // ---------------------------------------------------------
 
-    const authResult = await requireAuthenticatedUser(request, ["SUPER_ADMIN"]);
+    const authResult = await requireAuthenticatedUser(
+      request,
+      ["SUPER_ADMIN"]
+    );
+
     if (authResult instanceof Response) return authResult;
 
     // ---------------------------------------------------------
-    // 2. READ FORM DATA
+    // 2. READ REQUEST BODY
     // ---------------------------------------------------------
 
     const body = await request.json();
@@ -100,7 +104,10 @@ export async function PUT(request: NextRequest) {
     // 4. SAVE NON-SENSITIVE SETTINGS
     // ---------------------------------------------------------
 
-    await upsertSystemConfig("SMTP_HOST", host.trim());
+    await upsertSystemConfig(
+      "SMTP_HOST",
+      host.trim()
+    );
 
     await upsertSystemConfig(
       "SMTP_PORT",
@@ -135,13 +142,6 @@ export async function PUT(request: NextRequest) {
     // 5. ENCRYPT SMTP PASSWORD
     // ---------------------------------------------------------
 
-    // IMPORTANT:
-    // Only encrypt/update the password when the administrator
-    // actually supplied one.
-    //
-    // This allows the admin to update host/from/etc. without
-    // accidentally deleting the existing SMTP password.
-
     if (
       password !== undefined &&
       password !== null &&
@@ -158,23 +158,27 @@ export async function PUT(request: NextRequest) {
     }
 
     // ---------------------------------------------------------
-    // 6. NEVER RETURN THE PASSWORD
+    // 6. NEVER RETURN PASSWORD
     // ---------------------------------------------------------
+
+    const hasPassword =
+      password !== undefined &&
+      password !== null &&
+      String(password).length > 0
+        ? true
+        : await hasExistingSmtpPassword();
 
     return NextResponse.json({
       success: true,
       message: "Email configuration saved successfully",
-      hasPassword:
-        password !== undefined &&
-          password !== null &&
-          String(password).length > 0
-          ? true
-          : await hasExistingSmtpPassword(),
+      hasPassword,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(
       "Failed to save email configuration:",
-      error instanceof Error ? error.message : "Unknown error"
+      error instanceof Error
+        ? error.message
+        : "Unknown error"
     );
 
     return NextResponse.json(
@@ -188,36 +192,58 @@ export async function PUT(request: NextRequest) {
 }
 
 // ------------------------------------------------------------------
-// GET current SMTP configuration (excluding password) for UI consumption
+// GET current SMTP configuration
+// Password is never returned.
 // ------------------------------------------------------------------
+
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAuthenticatedUser(request, ["SUPER_ADMIN"]);
+    const authResult = await requireAuthenticatedUser(
+      request,
+      ["SUPER_ADMIN"]
+    );
+
     if (authResult instanceof Response) return authResult;
 
-    const keys = [
+    // Use a normal mutable string array for Prisma's `in`.
+    const keys: string[] = [
       "SMTP_HOST",
       "SMTP_PORT",
       "SMTP_USER",
       "SMTP_FROM",
       "SMTP_FROM_NAME",
       "SMTP_SERVICE",
-    ] as const;
+    ];
 
     const configRecords = await prisma.systemConfig.findMany({
-      where: { key: { in: keys } },
-      select: { key: true, value: true },
+      where: {
+        key: {
+          in: keys,
+        },
+      },
+      select: {
+        key: true,
+        value: true,
+      },
     });
 
     const config: Record<string, string> = {};
+
     for (const rec of configRecords) {
-      config[rec.key] = rec.value;
+      if (rec.value !== null && rec.value !== undefined) {
+        config[rec.key] = String(rec.value);
+      }
     }
 
-    const passwordRecord = await prisma.systemConfig.findFirst({
-      where: { key: "SMTP_PASS" },
-      select: { id: true },
-    });
+    const passwordRecord =
+      await prisma.systemConfig.findFirst({
+        where: {
+          key: "SMTP_PASS",
+        },
+        select: {
+          id: true,
+        },
+      });
 
     return NextResponse.json({
       success: true,
@@ -231,22 +257,39 @@ export async function GET(request: NextRequest) {
       },
       hasPassword: Boolean(passwordRecord),
     });
-  } catch (error) {
-    console.error("GET /api/admin/email-config error:", error);
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
+  } catch (error: unknown) {
+    console.error(
+      "GET /api/admin/email-config error:",
+      error instanceof Error
+        ? error.message
+        : "Unknown error"
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Internal server error",
+      },
+      { status: 500 }
+    );
   }
 }
 
+// ------------------------------------------------------------------
+// Check whether an SMTP password already exists.
+// ------------------------------------------------------------------
+
 async function hasExistingSmtpPassword(): Promise<boolean> {
-  const config = await prisma.systemConfig.findFirst({
-    where: {
-      key: "SMTP_PASS",
-    },
-    select: {
-      id: true,
-      value: true,
-    },
-  });
+  const config =
+    await prisma.systemConfig.findFirst({
+      where: {
+        key: "SMTP_PASS",
+      },
+      select: {
+        id: true,
+        value: true,
+      },
+    });
 
   return Boolean(config?.value);
 }

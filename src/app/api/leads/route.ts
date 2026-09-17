@@ -5,22 +5,41 @@ import { extractTokenFromRequest, getTokenPayload, getTenantWhereClauseAsync, ge
 import { logAuditEvent, getIpFromRequest } from "@/lib/audit";
 import { LeadSource } from "@prisma/client";
 
-function toPrismaLeadSource(val: any): LeadSource | null {
-  if (!val || typeof val !== "string") return null;
-  const normalized = val.trim().toUpperCase().replace(/\s+/g, "_");
-  
-  if (Object.values(LeadSource).includes(normalized as LeadSource)) {
+function toPrismaLeadSource(val: unknown): LeadSource | null {
+  if (!val || typeof val !== "string") {
+    return null;
+  }
+
+  const normalized = val
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+
+  // Already a valid Prisma enum value
+  if (
+    Object.values(LeadSource).includes(
+      normalized as LeadSource
+    )
+  ) {
     return normalized as LeadSource;
   }
 
-  if (normalized === "GOOGLE_ADS" || normalized === "FACEBOOK" || normalized === "INSTAGRAM" || normalized === "ADVERTISING") {
-    return LeadSource.ADVERTISING;
+  // Legacy / frontend mappings
+  if (
+    normalized === "GOOGLE_ADS" ||
+    normalized === "FACEBOOK" ||
+    normalized === "INSTAGRAM" ||
+    normalized === "ADVERTISING"
+  ) {
+    return LeadSource.ADVERTISEMENT;
   }
+
   if (normalized === "COLD_CALL") {
-    return LeadSource.COLD_CALL;
+    return LeadSource.PHONE;
   }
+
   if (normalized === "COLD_EMAIL") {
-    return LeadSource.COLD_EMAIL;
+    return LeadSource.EMAIL;
   }
 
   return LeadSource.OTHER;
@@ -55,7 +74,7 @@ export async function GET(request: Request) {
         { interestedProduct: { contains: search, mode: "insensitive" } },
         { user: { name: { contains: search, mode: "insensitive" } } },
       ];
-      
+
       // If tenantFilter already has an OR (like ADMIN does), we must use AND to combine them
       if (tenantFilter.OR) {
         where.AND = [
@@ -223,14 +242,14 @@ export async function POST(request: Request) {
 
     // Audit log
     await logAuditEvent({
-      action:    "LEAD_CREATED",
-      category:  "Leads CRM",
-      severity:  "SUCCESS",
-      actorName:  payload.name || payload.email,
+      action: "LEAD_CREATED",
+      category: "Leads CRM",
+      severity: "SUCCESS",
+      actorName: payload.name || payload.email,
       actorEmail: payload.email,
-      actorRole:  payload.role,
+      actorRole: payload.role,
       targetName: `${firstName} ${lastName}${company ? ` (${company})` : ""}`,
-      summary:   `Created new lead: ${firstName} ${lastName}${company ? ` from ${company}` : ""}`,
+      summary: `Created new lead: ${firstName} ${lastName}${company ? ` from ${company}` : ""}`,
       ipAddress: getIpFromRequest(request),
     });
 

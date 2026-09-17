@@ -57,6 +57,10 @@ interface Subscription {
   planPriceId: string | null;
   billingInterval: string | null;
   cancelAtPeriodEnd: boolean;
+  trial_starts_at?: string | null;
+  trialEndsAt?: string | null;
+  currentPeriodStart?: string | null;
+  currentPeriodEnd?: string | null;
   plan: Plan;
   planPrice: any;
 }
@@ -355,7 +359,7 @@ export default function SettingsSubscriptionPage() {
           )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {plans.map((plan: any) => {
+          {plans.map((plan) => {
             // SOURCE OF TRUTH: prices[] only — never plan.basePrice
             const activePrice =
               plan.prices?.find((p: any) => p.billingInterval === billingInterval && p.isActive) ||

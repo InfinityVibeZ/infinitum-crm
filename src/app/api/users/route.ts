@@ -169,7 +169,7 @@ export async function GET(request: Request) {
       >();
       const now = new Date();
       for (const t of invitationTokens) {
-        if (!latestTokenByUser.has(t.userId)) {
+        if (t.userId && !latestTokenByUser.has(t.userId)) {
           latestTokenByUser.set(t.userId, t);
         }
       }
@@ -295,7 +295,7 @@ export async function GET(request: Request) {
         { expiresAt: Date }
       >();
       for (const t of invitationTokens) {
-        if (!latestTokenByUser.has(t.userId)) {
+        if (t.userId && !latestTokenByUser.has(t.userId)) {
           latestTokenByUser.set(t.userId, t);
         }
       }
@@ -387,7 +387,10 @@ export async function GET(request: Request) {
       { expiresAt: Date }
     >();
     const now = new Date();
+
     for (const t of invitationTokens) {
+      if (!t.userId) continue;
+
       if (!latestTokenByUser.has(t.userId)) {
         latestTokenByUser.set(t.userId, t);
       }
@@ -627,13 +630,13 @@ export async function POST(request: Request) {
     let mailResult: { success: boolean; setupUrl: string; error?: any };
     if (assignedRole === "ADMIN" || assignedRole === "SUPER_ADMIN") {
       mailResult = await sendAdminInvitationEmail({
-          adminName: name,
-          adminEmail: email,
-          companyName: targetCompanyName,
-          rawToken,
-          baseUrl,
-          temporaryPassword: initialTempPassword,
-        });
+        adminName: name,
+        adminEmail: email,
+        companyName: targetCompanyName,
+        rawToken,
+        baseUrl,
+        temporaryPassword: initialTempPassword,
+      });
       await logAuditEvent({
         action: "ADMIN_CREATED",
         category: "Admin Management",
@@ -641,20 +644,20 @@ export async function POST(request: Request) {
         actorName:
           payload?.name ||
           (isPublicRegistration ? "Public registration" : "Unknown"),
-        actorEmail: payload?.email,
+        actorEmail: payload?.email || "system@localhost",
         actorRole: payload?.role || "PUBLIC",
         targetName: `${name} (${email})`,
         summary: `Created Admin account for ${targetCompanyName} and sent invitation link`,
       });
     } else {
       mailResult = await sendUserInvitationEmail({
-          userName: name,
-          userEmail: email,
-          companyName: targetCompanyName,
-          rawToken,
-          baseUrl,
-          temporaryPassword: initialTempPassword,
-        });
+        userName: name,
+        userEmail: email,
+        companyName: targetCompanyName,
+        rawToken,
+        baseUrl,
+        temporaryPassword: initialTempPassword,
+      });
       await logAuditEvent({
         action: "USER_CREATED",
         category: "User Management",
@@ -662,7 +665,7 @@ export async function POST(request: Request) {
         actorName:
           payload?.name ||
           (isPublicRegistration ? "Public registration" : "Unknown"),
-        actorEmail: payload?.email,
+        actorEmail: payload?.email || "system@localhost",
         actorRole: payload?.role || "PUBLIC",
         targetName: `${name} (${email})`,
         summary: `Created User account for ${targetCompanyName} and sent invitation link`,
