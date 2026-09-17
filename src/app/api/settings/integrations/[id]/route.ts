@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { logAuditEvent, getIpFromRequest } from "@/lib/audit";
-import { deleteIntegration } from "@/lib/integrations";
 import { getProvider } from "@/lib/integrations/provider-registry";
 import { getIntegrationCredentials } from "@/lib/integrations";
 
@@ -12,7 +11,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const auth = await requireAuthenticatedUser(request);
     if (auth instanceof Response) return auth;
     const { payload, user } = auth;
-    
+
     if (!user.companyId) {
       return NextResponse.json({ error: "No company associated with user" }, { status: 403 });
     }
@@ -53,39 +52,107 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 // DELETE /api/settings/integrations/[id]
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+// DELETE /api/settings/integrations/[id]
+// Disconnect integration without deleting historical data.
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const auth = await requireAuthenticatedUser(request);
+
     if (auth instanceof Response) return auth;
+
     const { payload, user } = auth;
 
     if (!user.companyId) {
-      return NextResponse.json({ error: "No company associated with user" }, { status: 403 });
+      return NextResponse.json(
+        { error: "No company associated with user" },
+        { status: 403 }
+      );
     }
 
-    if (payload.role !== "ADMIN" && payload.role !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Forbidden: Admins only" }, { status: 403 });
+    if (
+      payload.role !== "ADMIN" &&
+      payload.role !== "SUPER_ADMIN"
+    ) {
+      return NextResponse.json(
+        { error: "Forbidden: Admins only" },
+        { status: 403 }
+      );
     }
 
     const integration = await prisma.integration.findFirst({
-      where: { id: params.id, companyId: user.companyId }
+      where: {
+        id: params.id,
+        companyId: user.companyId,
+      },
     });
 
     if (!integration) {
-      return NextResponse.json({ error: "Integration not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Integration not found" },
+        { status: 404 }
+      );
     }
 
-    // Attempt to disconnect at the provider level if registered
+    /*
+     * Attempt provider-level disconnect.
+     *
+     * Failure here should NOT prevent the local integration
+     * from being marked disconnected. This is important because
+     * the provider may already be disconnected/revoked.
+     */
     try {
       const provider = getProvider(integration.provider);
-      const credentials = await getIntegrationCredentials(integration.id, user.companyId);
+
+      const credentials =
+        await getIntegrationCredentials(
+          integration.id,
+          user.companyId
+        );
+
       await provider.disconnect(credentials);
-    } catch (e: any) {
-      console.warn(`Could not disconnect ${integration.provider} at provider level:`, e.message);
-      // Proceed with local deletion anyway
+    } catch (error: unknown) {
+      console.warn(
+        `Could not disconnect ${integration.provider} at provider level:`,
+        error instanceof Error
+          ? error.message
+          : String(error)
+      );
     }
 
-    await deleteIntegration(integration.id, user.companyId);
+    /*
+     * IMPORTANT:
+     *
+     * Do NOT delete the Integration record.
+     *
+     * Historical conversations/messages must remain intact.
+     *
+     * Instead mark the integration as disconnected/inactive.
+     */
+    const disconnectedIntegration =
+      await prisma.integration.update({
+        where: {
+          id: integration.id,
+        },
+        data: {
+          status: "DISCONNECTED",
+          isActive: false,
+          errorMessage: null,
+          updatedAt: new Date(),
+        },
+        select: {
+          id: true,
+          provider: true,
+          type: true,
+          externalId: true,
+          displayName: true,
+          status: true,
+          isActive: true,
+          updatedAt: true,
+        },
+      });
 
     // Audit log
     await logAuditEvent({
@@ -100,11 +167,26 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       ipAddress: getIpFromRequest(request),
     });
 
-    return NextResponse.json({ success: true }, { status: 200 });
-  } catch (error: any) {
-    console.error("DELETE /api/settings/integrations/[id] error:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to delete integration" },
+      {
+        success: true,
+        integration: disconnectedIntegration,
+      },
+      { status: 200 }
+    );
+  } catch (error: unknown) {
+    console.error(
+      "DELETE /api/settings/integrations/[id] error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to disconnect integration",
+      },
       { status: 500 }
     );
   }
