@@ -804,66 +804,43 @@ export const metaProvider: IntegrationProvider = {
         "[HMAC TRACE] Loading Meta platform configuration..."
       );
 
-      const config =
-        await getMetaPlatformConfig();
+      const config = await getMetaPlatformConfig();
 
-      console.log(
-        "[HMAC TRACE] Meta configuration:",
-        {
-          appId: config.appId,
+      /*
+       * Facebook and Instagram use different Meta applications.
+       *
+       * Facebook webhook:
+       *   config.appSecret
+       *
+       * Instagram webhook:
+       *   config.instagramAppSecret
+       *
+       * The webhook URL tells us which provider is sending
+       * the request.
+       */
+      const pathname = new URL(request.url).pathname;
 
-          hasAppSecret:
-            !!config.appSecret,
+      const isInstagramWebhook =
+        pathname.toLowerCase().includes("/instagram");
 
-          appSecretLength:
-            config.appSecret?.length ?? 0,
+      appSecret = isInstagramWebhook
+        ? config.instagramAppSecret
+        : config.appSecret;
 
-          appSecretByteLength:
-            config.appSecret
-              ? Buffer.byteLength(
-                config.appSecret,
-                "utf8"
-              )
-              : 0,
+      console.log("[HMAC TRACE] Webhook configuration:", {
+        provider: isInstagramWebhook
+          ? "INSTAGRAM"
+          : "FACEBOOK",
 
-          appSecretTrimmedLength:
-            config.appSecret?.trim().length ?? 0,
+        appId: isInstagramWebhook
+          ? config.instagramAppId
+          : config.appId,
 
-          appSecretTrimmedByteLength:
-            config.appSecret
-              ? Buffer.byteLength(
-                config.appSecret.trim(),
-                "utf8"
-              )
-              : 0,
+        hasAppSecret: !!appSecret,
 
-          appSecretFingerprint:
-            config.appSecret
-              ? crypto
-                .createHash("sha256")
-                .update(config.appSecret)
-                .digest("hex")
-              : null,
-
-          appSecretTrimmedFingerprint:
-            config.appSecret
-              ? crypto
-                .createHash("sha256")
-                .update(
-                  config.appSecret.trim()
-                )
-                .digest("hex")
-              : null,
-
-          instagramConfigId:
-            config.instagramConfigId,
-
-          facebookConfigId:
-            config.facebookConfigId,
-        }
-      );
-
-      appSecret = config.appSecret;
+        secretLength:
+          appSecret?.length ?? 0,
+      });
     } catch (error) {
       console.error(
         "[HMAC TRACE] ❌ Failed to load Meta configuration:",
@@ -879,7 +856,7 @@ export const metaProvider: IntegrationProvider = {
 
     if (!appSecret) {
       console.error(
-        "[HMAC TRACE] ❌ App Secret is empty"
+        "[HMAC TRACE] ❌ Webhook App Secret is empty"
       );
 
       console.log(
