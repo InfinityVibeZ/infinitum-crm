@@ -71,6 +71,7 @@ export default function InboxPage() {
     // IMPORTANT:
     // Immediately clear the previous conversation's messages.
     setMessages([]);
+    setSendError(null);
 
     fetchMessages(selectedConversation.id);
 
@@ -188,6 +189,84 @@ export default function InboxPage() {
       );
     } catch (error) {
       console.error("Failed to mark as read", error);
+    }
+  };
+
+  // Phase 3.8.5 — Outbound Instagram messaging.
+  const sendingRef = useRef(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  // Only Instagram conversations with an active integration can send.
+  const canSend = (conv: Conversation) =>
+    conv.channel.toUpperCase() === "INSTAGRAM" &&
+    !!conv.integration?.id &&
+    conv.integration?.isActive !== false;
+
+  const sendMessage = async () => {
+    if (!selectedConversation || !canSend(selectedConversation)) return;
+
+    const text = replyText.trim();
+    if (!text) return;
+
+    // Client-side duplicate-send guard (server is authoritative).
+    if (sendingRef.current) return;
+
+    sendingRef.current = true;
+    setSending(true);
+    setSendError(null);
+
+    try {
+      const res = await fetch(
+        `/api/inbox/conversations/${selectedConversation.id}/messages`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        }
+      );
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        // 409 = server-side duplicate rejection.
+        if (res.status === 409) {
+          setReplyText("");
+          setSendError("This exact message was just sent.");
+        } else {
+          setSendError(
+            data?.error ||
+              `Failed to send message (${res.status})`
+          );
+        }
+        return;
+      }
+
+      // Append the persisted message (server-returned, includes id/status).
+      const sentMessage: Message = data.message;
+
+      if (sentMessage) {
+        setMessages((prev) => [...prev, sentMessage]);
+      }
+
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === selectedConversation.id
+            ? {
+                ...c,
+                last_message_at: new Date().toISOString(),
+              }
+            : c
+        )
+      );
+
+      setReplyText("");
+    } catch (error) {
+      console.error("Failed to send message", error);
+      setSendError("Failed to send message. Please try again.");
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
     }
   };
 
@@ -424,30 +503,59 @@ export default function InboxPage() {
               )}
             </div>
 
-            {/* Input Area */}
+            {/* Input Area — Phase 3.8.5: outbound enabled for Instagram */}
             <div className="p-4 bg-nexus-card border-t border-nexus-border">
-              <div
-                className="flex items-center gap-2 opacity-50 cursor-not-allowed"
-                title="Outbound messaging disabled in Phase 3.8.4"
-              >
-                <input
-                  type="text"
-                  value={replyText}
-                  onChange={(e) =>
-                    setReplyText(e.target.value)
-                  }
-                  placeholder="Type a message... (Disabled in Phase 3.8.4)"
-                  className="flex-1 bg-nexus-bg border border-nexus-border rounded-lg px-4 py-2 text-nexus-text outline-none"
-                  disabled
-                />
+              {sendError && (
+                <div className="mb-2 text-xs text-red-500">{sendError}</div>
+              )}
+              {canSend(selectedConversation) ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={replyText}
+                    onChange={(e) =>
+                      setReplyText(e.target.value)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                    placeholder="Type a message..."
+                    maxLength={1000}
+                    className="flex-1 bg-nexus-bg border border-nexus-border rounded-lg px-4 py-2 text-nexus-text outline-none"
+                    disabled={sending}
+                  />
 
-                <button
-                  className="p-2 bg-blue-600 text-white rounded-lg"
-                  disabled
+                  <button
+                    className="p-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                    onClick={sendMessage}
+                    disabled={sending || !replyText.trim()}
+                  >
+                    <IconSend size={20} />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className="flex items-center gap-2 opacity-50 cursor-not-allowed"
+                  title="Outbound messaging only supported for Instagram conversations"
                 >
-                  <IconSend size={20} />
-                </button>
-              </div>
+                  <input
+                    type="text"
+                    placeholder="Outbound messaging only supported for Instagram conversations"
+                    className="flex-1 bg-nexus-bg border border-nexus-border rounded-lg px-4 py-2 text-nexus-text outline-none"
+                    disabled
+                  />
+
+                  <button
+                    className="p-2 bg-blue-600 text-white rounded-lg"
+                    disabled
+                  >
+                    <IconSend size={20} />
+                  </button>
+                </div>
+              )}
             </div>
           </>
         ) : (
