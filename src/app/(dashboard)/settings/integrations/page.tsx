@@ -16,20 +16,20 @@ import {
 import toast from "react-hot-toast";
 
 const AVAILABLE_PROVIDERS = [
-  { 
-    id: "FACEBOOK", providerId: "META", name: "Facebook", type: "SOCIAL", 
+  {
+    id: "FACEBOOK", providerId: "META", name: "Facebook", type: "SOCIAL",
     icon: IconBrandFacebook, color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20",
     description: "Connect your Facebook Pages to track leads and analyze social engagement.",
     features: ["Lead generation tracking", "Page insights", "Ad campaign metrics"]
   },
-  { 
-    id: "INSTAGRAM", providerId: "INSTAGRAM", name: "Instagram", type: "SOCIAL", 
+  {
+    id: "INSTAGRAM", providerId: "INSTAGRAM", name: "Instagram", type: "SOCIAL",
     icon: IconBrandInstagram, color: "text-pink-500", bg: "bg-pink-500/10", border: "border-pink-500/20",
     description: "Link Professional Instagram accounts to sync followers and direct messages.",
     features: ["Follower analytics", "Direct message sync", "Story insights"]
   },
-  { 
-    id: "WHATSAPP", providerId: "WHATSAPP", name: "WhatsApp Business", type: "MESSAGING", 
+  {
+    id: "WHATSAPP", providerId: "WHATSAPP", name: "WhatsApp Business", type: "MESSAGING",
     icon: IconBrandWhatsapp, color: "text-[#25D366]", bg: "bg-[#25D366]/10", border: "border-[#25D366]/20",
     description: "Connect WhatsApp Business API to automate support and outreach messaging.",
     features: ["Automated templates", "Direct chat sync", "Read receipt tracking"]
@@ -56,7 +56,7 @@ export default function SettingsIntegrationsPage() {
 
   useEffect(() => {
     fetchIntegrations();
-    
+
     // Check URL params for OAuth results
     const params = new URLSearchParams(window.location.search);
     if (params.get("success")) {
@@ -77,7 +77,7 @@ export default function SettingsIntegrationsPage() {
       const res = await fetch(`/api/settings/integrations/${integrationId}/assets`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to discover assets");
-      
+
       setDiscoveredAssets(data.assets || []);
       setShowAssetsFor(integrationId);
     } catch (err: any) {
@@ -97,7 +97,7 @@ export default function SettingsIntegrationsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save assets");
-      
+
       toast.success("Assets saved successfully!");
       setShowAssetsFor(null);
     } catch (err: any) {
@@ -123,7 +123,7 @@ export default function SettingsIntegrationsPage() {
           const height = 700;
           const left = window.innerWidth / 2 - width / 2 + window.screenX;
           const top = window.innerHeight / 2 - height / 2 + window.screenY;
-          
+
           const popup = window.open(
             data.url,
             "MetaOAuth",
@@ -186,10 +186,10 @@ export default function SettingsIntegrationsPage() {
           credentialsPayload: { access_token: "mock_token", refresh_token: "mock_refresh" }
         })
       });
-      
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to connect");
-      
+
       toast.success(`${name} connected successfully!`);
       await fetchIntegrations();
     } catch (err: any) {
@@ -201,18 +201,18 @@ export default function SettingsIntegrationsPage() {
 
   const handleDisconnect = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to disconnect ${name}?`)) return;
-    
+
     setActionLoading(`disconnect-${id}`);
     try {
       const res = await fetch(`/api/settings/integrations/${id}`, {
         method: "DELETE"
       });
-      
+
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to disconnect");
       }
-      
+
       toast.success(`${name} disconnected.`);
       await fetchIntegrations();
     } catch (err: any) {
@@ -229,9 +229,9 @@ export default function SettingsIntegrationsPage() {
         method: "POST"
       });
       const data = await res.json();
-      
+
       if (!res.ok) throw new Error(data.error || "Failed to test connection");
-      
+
       if (data.success) {
         toast.success("Connection test passed!");
       } else {
@@ -245,12 +245,24 @@ export default function SettingsIntegrationsPage() {
     }
   };
 
-  const connectedProviders = AVAILABLE_PROVIDERS.filter(p => integrations.some(i => i.provider === p.providerId));
-  const availableProviders = AVAILABLE_PROVIDERS.filter(p => !integrations.some(i => i.provider === p.providerId));
+  const isIntegrationConnected = (integration: any) =>
+    integration.status === "CONNECTED" &&
+    integration.isActive === true;
 
+  const connectedProviders = AVAILABLE_PROVIDERS.filter(p =>
+    integrations.some(
+      i => i.provider === p.providerId && isIntegrationConnected(i)
+    )
+  );
+
+  const availableProviders = AVAILABLE_PROVIDERS.filter(p =>
+    !integrations.some(
+      i => i.provider === p.providerId && isIntegrationConnected(i)
+    )
+  );
   return (
     <div className="space-y-12 text-nexus-text max-w-6xl mx-auto pb-16">
-      
+
       {/* Immersive Header */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-nexus-border/50 pb-6">
         <div className="space-y-2">
@@ -259,7 +271,7 @@ export default function SettingsIntegrationsPage() {
             Integrations Hub
           </h1>
           <p className="text-base text-nexus-text-secondary max-w-2xl">
-            Supercharge your CRM by connecting your favorite external platforms. 
+            Supercharge your CRM by connecting your favorite external platforms.
             Manage active syncs or discover new powerful tools below.
           </p>
         </div>
@@ -272,7 +284,7 @@ export default function SettingsIntegrationsPage() {
         </div>
       ) : (
         <div className="space-y-16">
-          
+
           {/* Active Connections Dashboard */}
           {connectedProviders.length > 0 && (
             <section className="space-y-6">
@@ -280,29 +292,34 @@ export default function SettingsIntegrationsPage() {
                 <div className="w-2 h-2 rounded-full bg-nexus-primary animate-pulse"></div>
                 <h2 className="text-2xl font-bold text-white tracking-wide">Active Connections</h2>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {connectedProviders.map(provider => {
-                  const activeIntegration = integrations.find(i => i.provider === provider.providerId);
+                  const activeIntegration = integrations.find(
+                    i =>
+                      i.provider === provider.providerId &&
+                      i.status === "CONNECTED" &&
+                      i.isActive === true
+                  );
                   const IconComponent = provider.icon || IconPlugConnected;
                   const isError = activeIntegration.status === 'ERROR';
-                  
+
                   return (
-                    <div 
-                      key={`connected-${provider.id}`} 
+                    <div
+                      key={`connected-${provider.id}`}
                       className="group relative bg-[#0a0a0a] border border-white/10 hover:border-nexus-primary/30 rounded-2xl overflow-hidden transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.5)]"
                     >
                       {/* Gradient Header */}
                       <div className={`h-24 ${provider.bg} opacity-20 w-full absolute top-0 left-0 transition-opacity duration-500 group-hover:opacity-40`}></div>
                       <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent to-[#0a0a0a] z-0"></div>
-                      
+
                       <div className="relative z-10 p-6 flex flex-col h-full">
                         {/* Top Section */}
                         <div className="flex justify-between items-start mb-4">
                           <div className={`p-3 rounded-xl bg-white/5 backdrop-blur-md border border-white/10 ${provider.color} shadow-lg group-hover:scale-110 transition-transform duration-500`}>
                             <IconComponent size={28} stroke={1.5} />
                           </div>
-                          
+
                           {/* Status Indicator */}
                           <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5">
                             <span className="relative flex h-2.5 w-2.5">
@@ -314,7 +331,7 @@ export default function SettingsIntegrationsPage() {
                             </span>
                           </div>
                         </div>
-                        
+
                         {/* Title Section */}
                         <div className="mb-6">
                           <h3 className="font-bold text-xl text-white tracking-tight mb-1">{provider.name}</h3>
@@ -322,7 +339,7 @@ export default function SettingsIntegrationsPage() {
                             {activeIntegration.displayName !== `${provider.name} Account` ? activeIntegration.displayName : `Integration Linked`}
                           </p>
                         </div>
-                        
+
                         {/* Sync Info - Making it Useful */}
                         <div className="mt-auto bg-white/[0.02] rounded-xl p-4 border border-white/5 group-hover:bg-white/[0.04] transition-colors">
                           <div className="flex justify-between items-center mb-3">
@@ -343,7 +360,7 @@ export default function SettingsIntegrationsPage() {
                               ) : 'Never'}
                             </span>
                           </div>
-                          
+
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleTestConnection(activeIntegration.id)}
@@ -377,7 +394,7 @@ export default function SettingsIntegrationsPage() {
                               </span>
                               {showAssetsFor === activeIntegration.id ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
                             </button>
-                            
+
                             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showAssetsFor === activeIntegration.id ? "max-h-96 opacity-100 mt-2" : "max-h-0 opacity-0"}`}>
                               <div className="p-3 bg-black/50 border border-white/10 rounded-lg">
                                 {discoveredAssets.length === 0 ? (
@@ -393,8 +410,8 @@ export default function SettingsIntegrationsPage() {
                                   </ul>
                                 )}
                                 <div className="flex justify-end">
-                                  <button 
-                                    onClick={() => handleSaveAssets(activeIntegration.id)} 
+                                  <button
+                                    onClick={() => handleSaveAssets(activeIntegration.id)}
                                     disabled={actionLoading === `save-assets-${activeIntegration.id}`}
                                     className="w-full py-1.5 text-[10px] bg-white text-black font-bold rounded hover:bg-gray-200 transition-colors disabled:opacity-50"
                                   >
@@ -418,7 +435,7 @@ export default function SettingsIntegrationsPage() {
             <h2 className="text-2xl font-bold text-white tracking-wide border-b border-nexus-border/50 pb-4">
               Discover Integrations
             </h2>
-            
+
             {availableProviders.length === 0 ? (
               <div className="text-center p-12 bg-nexus-card border border-nexus-border rounded-2xl">
                 <IconCheck size={48} className="mx-auto text-nexus-primary mb-4 opacity-50" />
@@ -429,10 +446,10 @@ export default function SettingsIntegrationsPage() {
               <div className="flex flex-col gap-4">
                 {availableProviders.map((provider) => {
                   const IconComponent = provider.icon || IconPlugConnected;
-                  
+
                   return (
-                    <div 
-                      key={`available-${provider.id}`} 
+                    <div
+                      key={`available-${provider.id}`}
                       className="group flex flex-col md:flex-row items-start md:items-center justify-between p-6 bg-nexus-card border border-nexus-border hover:border-nexus-border/80 rounded-2xl transition-all duration-300 hover:bg-white/[0.02]"
                     >
                       <div className="flex items-start gap-6 flex-1">
@@ -458,7 +475,7 @@ export default function SettingsIntegrationsPage() {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="mt-6 md:mt-0 md:ml-6 shrink-0 w-full md:w-auto">
                         <button
                           onClick={() => handleConnect(provider.id, provider.providerId, provider.name, provider.type)}
