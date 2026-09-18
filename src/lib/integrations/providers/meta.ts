@@ -50,6 +50,119 @@ async function getMetaPlatformConfig() {
   };
 }
 /**
+ * Phase 3.8.5 — Outbound Instagram text messaging.
+ *
+ * Sends a plain-text message to a customer via the Instagram Messaging API
+ * (graph.instagram.com /me/messages) using the tenant's connected
+ * Instagram access token.
+ *
+ * IMPORTANT:
+ * - The access token is never returned, logged, or included in error output.
+ * - Only success/id/error_code/error_subcode/error_message (provider-safe
+ *   fields) are surfaced to the caller.
+ */
+export async function sendInstagramMessage(
+  credentials: any,
+  recipientIgId: string,
+  text: string
+): Promise<
+  | { ok: true; externalMessageId: string }
+  | { ok: false; errorCode?: string; errorMessage?: string }
+> {
+  const accessToken =
+    credentials?.accessToken ||
+    credentials?.access_token;
+
+  if (!accessToken || !recipientIgId || !text) {
+    return {
+      ok: false,
+      errorCode: "MISSING_INPUTS",
+      errorMessage: "Missing access token, recipient ID, or message text",
+    };
+  }
+
+  try {
+    const response = await fetch(
+      "https://graph.instagram.com/v22.0/me/messages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipient: { id: recipientIgId },
+          message: { text },
+          access_token: accessToken,
+        }),
+      }
+    );
+
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      console.warn("[Instagram Send] Provider rejected message:", {
+        status: response.status,
+        errorCode: data?.error?.code ?? data?.code ?? null,
+        errorSubcode: data?.error?.error_subcode ?? null,
+        errorType: data?.error?.type ?? null,
+      });
+
+      return {
+        ok: false,
+        errorCode:
+          data?.error?.code != null
+            ? String(data.error.code)
+            : String(response.status),
+        errorMessage:
+          typeof data?.error?.message === "string"
+            ? data.error.message
+            : "Provider rejected the message",
+      };
+    }
+
+    const externalMessageId =
+      typeof data?.message_id === "string"
+        ? data.message_id
+        : null;
+
+    if (!externalMessageId) {
+      console.warn(
+        "[Instagram Send] Provider accepted but returned no message_id"
+      );
+      return {
+        ok: false,
+        errorCode: "NO_MESSAGE_ID",
+        errorMessage: "Provider accepted the message but returned no message_id",
+      };
+    }
+
+    return { ok: true, externalMessageId };
+  } catch (error) {
+    // Network failure — never include token or full provider response.
+    console.warn("[Instagram Send] Network failure while sending message:", {
+      error:
+        error instanceof Error
+          ? error.message
+          : String(error),
+    });
+
+    return {
+      ok: false,
+      errorCode: "NETWORK_ERROR",
+      errorMessage:
+        error instanceof Error
+          ? error.message
+          : "Network failure while sending message",
+    };
+  }
+}
+
+/**
  * Fetches the Instagram profile for a message sender.
  *
  * This uses the access token belonging to the tenant's connected
