@@ -415,15 +415,21 @@ export const metaProvider: IntegrationProvider = {
       const llResponse = await fetch(llUrl);
       const llData = await llResponse.json();
 
-      console.log(
-        "[IG-OAUTH-FIX] Long-lived token response:",
-        {
-          status: llResponse.status,
-          ok: llResponse.ok,
-          hasAccessToken: !!llData?.access_token,
-          responseKeys: Object.keys(llData || {}),
-        }
-      );
+      console.error("[IG-OAUTH-FIX] Long-lived token response:", {
+        status: llResponse.status,
+        ok: llResponse.ok,
+        hasAccessToken: !!llData.access_token,
+        responseKeys: Object.keys(llData),
+        error: llData.error
+          ? {
+            message: llData.error.message,
+            type: llData.error.type,
+            code: llData.error.code,
+            error_subcode: llData.error.error_subcode,
+            fbtrace_id: llData.error.fbtrace_id,
+          }
+          : null,
+      });
 
       if (!llResponse.ok) {
         throw new Error(
