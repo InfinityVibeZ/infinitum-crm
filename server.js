@@ -16,7 +16,7 @@ require("tsconfig-paths").register({
 const { getRealtimeHub, startRealtimeHub, stopRealtimeHub } = require("./src/realtime/server");
 
 async function main() {
-  const dev = process.env.NODE_ENV === "development";
+  const dev = process.env.NODE_ENV === "development" || process.argv.includes("--dev");
   const keyPath = path.join(process.cwd(), "certificates", "localhost-key.pem");
   const certPath = path.join(process.cwd(), "certificates", "localhost.pem");
   const useHttps = dev && fs.existsSync(keyPath) && fs.existsSync(certPath);
@@ -37,7 +37,7 @@ async function main() {
     dev,
     dir: process.cwd(),
     httpServer,
-    ...(dev ? { turbopack: false } : {}),
+    ...(dev ? { turbopack: true } : {}),
   });
   handle = app.getRequestHandler();
   await app.prepare();

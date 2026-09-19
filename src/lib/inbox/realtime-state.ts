@@ -57,10 +57,23 @@ export function applyMessageToList(
   const isOutbound = event.direction === "OUTBOUND";
   const stamp = event.lastMessageAt || event.createdAt || conv.last_message_at;
   const preview = event.preview || "";
+  const message = event.messageId
+    ? {
+        id: event.messageId,
+        content: preview,
+        direction: event.direction || "INBOUND",
+        created_at: event.createdAt || stamp || new Date().toISOString(),
+        status: isOutbound ? "SENT" : "RECEIVED",
+      }
+    : null;
 
   const updated: Conversation = {
     ...conv,
     last_message_at: stamp || conv.last_message_at,
+    messages:
+      message && !conv.messages.some((item) => item.id === message.id)
+        ? [message, ...conv.messages]
+        : conv.messages,
     metadata: {
       ...conv.metadata,
       lastMessagePreview: preview,

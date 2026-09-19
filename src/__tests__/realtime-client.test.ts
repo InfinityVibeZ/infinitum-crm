@@ -56,6 +56,10 @@ test("realtime-state: applyMessageToList updates preview and reorders; unknown c
   });
   assert.equal(next[0].id, "c2"); // moved to top
   assert.equal(next.length, 2); // no duplicate rows
+  assert.equal(next[0].last_message_at, "2026-01-02T00:00:00Z");
+  assert.equal(next[0].messages[0].id, "m9");
+  assert.equal(next[0].messages[0].content, "hello");
+  assert.equal(next[0].metadata.lastReadAt, undefined); // inbound remains unread
   assert.equal(next[0].metadata.lastMessagePreview, "hello");
 
   const untouched = applyMessageToList(list, {

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --experimental-https",
+    "dev": "node server.js --dev",
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "node server.js",
