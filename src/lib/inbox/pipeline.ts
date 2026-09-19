@@ -813,6 +813,7 @@ export async function processInboxEvent(
         ? event.text.slice(0, 160)
         : null,
       lastMessageDirection: event.direction,
+      profilePictureUrl: instagramProfile?.profilePictureUrl ?? null,
     });
 
     console.log(

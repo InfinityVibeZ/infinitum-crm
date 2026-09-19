@@ -150,6 +150,27 @@ export default function InboxPage() {
               typeof event.lastMessageAt === "string" ? event.lastMessageAt : undefined,
           })
         );
+
+        if (!conversationsRef.current.some((conversation) => conversation.id === conversationId)) {
+          void fetch(`/api/inbox/conversations?filter=channel&channel=INSTAGRAM`, {
+            cache: "no-store",
+          })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((data) => {
+              const conversation = data?.conversations?.find(
+                (item: Conversation) => item.id === conversationId
+              );
+              if (!conversation) return;
+
+              setConversations((prev) => {
+                if (prev.some((item) => item.id === conversationId)) return prev;
+                return [conversation, ...prev];
+              });
+            })
+            .catch(() => {
+              // Realtime remains best-effort; REST refresh can recover the row.
+            });
+        }
       },
 
       // Conversation metadata changed (status/ordering).
@@ -163,6 +184,8 @@ export default function InboxPage() {
               typeof event.lastMessageAt === "string" ? event.lastMessageAt : undefined,
             lastMessagePreview:
               typeof event.lastMessagePreview === "string" ? event.lastMessagePreview : undefined,
+            profilePictureUrl:
+              typeof event.profilePictureUrl === "string" ? event.profilePictureUrl : undefined,
           })
         );
       },

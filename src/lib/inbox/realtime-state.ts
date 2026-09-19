@@ -104,6 +104,7 @@ export function applyConversationUpdated(
     status?: string;
     lastMessageAt?: string;
     lastMessagePreview?: string;
+    profilePictureUrl?: string | null;
   }
 ): Conversation[] {
   if (!event.conversationId) return list;
@@ -121,6 +122,9 @@ export function applyConversationUpdated(
         ? { lastMessagePreview: event.lastMessagePreview }
         : {}),
     },
+    contact: event.profilePictureUrl
+      ? { ...conv.contact, avatarUrl: event.profilePictureUrl }
+      : conv.contact,
   };
 
   const next = [...list];

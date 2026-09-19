@@ -64,6 +64,7 @@ export function buildConversationUpdatedEvent(input: {
   lastMessageAt: Date;
   lastMessagePreview?: string | null;
   lastMessageDirection?: string | null;
+  profilePictureUrl?: string | null;
 }): RealtimeEvent {
   return {
     name: "conversation_updated",
@@ -76,6 +77,7 @@ export function buildConversationUpdatedEvent(input: {
       lastMessageAt: input.lastMessageAt.toISOString(),
       lastMessagePreview: input.lastMessagePreview ?? null,
       lastMessageDirection: input.lastMessageDirection ?? null,
+      profilePictureUrl: input.profilePictureUrl ?? null,
     },
   };
 }
