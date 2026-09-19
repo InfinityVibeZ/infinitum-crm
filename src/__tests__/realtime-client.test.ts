@@ -90,10 +90,12 @@ test("realtime-state: conversation_updated reorders in place without duplicates"
     conversationId: "c1",
     status: "CLOSED",
     lastMessageAt: "2026-01-03T00:00:00Z",
+    profilePictureUrl: "https://cdn.example/avatar.jpg",
   });
   assert.equal(next[0].id, "c1");
   assert.equal(next.length, 2);
   assert.equal(next[0].status, "CLOSED");
+  assert.equal(next[0].contact.avatarUrl, "https://cdn.example/avatar.jpg");
 });
 
 test("realtime-state: conversation_read updates local read state only", async () => {
