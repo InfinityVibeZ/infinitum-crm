@@ -40,7 +40,9 @@ interface HubConnection {
 export class RealtimeHub {
   private config: RealtimeConfig;
   private httpServer: http.Server | null = null;
+  private ownsHttpServer = false;
   private wss: WebSocketServer | null = null;
+  private upgradeHandler: ((req: http.IncomingMessage, socket: import("stream").Duplex, head: Buffer) => void) | null = null;
   /** connectionId -> connection. */
   private connections = new Map<string, HubConnection>();
   /** Per-connection pending handshake state. */
@@ -58,27 +60,15 @@ export class RealtimeHub {
     return this.connections.size;
   }
 
-  async start(): Promise<void> {
+  async start(existingServer?: http.Server): Promise<void> {
     if (this.wss) return; // idempotent — supports reconnects/hot reloads
 
-    const httpServer = http.createServer((req, res) => {
-      // Plain HTTP requests to the hub are only used for health checks and
-      // cross-process event publishing (Next.js runs in a separate process).
-      if (req.url === "/health") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ status: "ok", connections: this.connections.size }));
-        return;
-      }
-      if (req.url === "/publish" && req.method === "POST") {
-        this.handlePublishRequest(req, res);
-        return;
-      }
-      res.writeHead(404);
-      res.end();
+    const httpServer = existingServer ?? http.createServer((req, res) => {
+      this.handleHttpRequest(req, res);
     });
 
     const wss = new WebSocketServer({
-      server: httpServer,
+      noServer: true,
       path: this.config.path,
       // Origin allowlist — no wildcards. Enforced at upgrade time.
       verifyClient: (info, done) => {
@@ -99,15 +89,28 @@ export class RealtimeHub {
       void this.handleConnection(socket, req);
     });
 
-    await new Promise<void>((resolve, reject) => {
-      httpServer.once("error", reject);
-      httpServer.listen(this.config.port, () => resolve());
-    });
+    const upgradeHandler = (req: http.IncomingMessage, socket: import("stream").Duplex, head: Buffer) => {
+      const requestPath = new URL(req.url || "/", "http://localhost").pathname;
+      if (requestPath !== this.config.path) return;
+      wss.handleUpgrade(req, socket, head, (client) => {
+        wss.emit("connection", client, req);
+      });
+    };
+    httpServer.on("upgrade", upgradeHandler);
+
+    if (!existingServer) {
+      await new Promise<void>((resolve, reject) => {
+        httpServer.once("error", reject);
+        httpServer.listen(this.config.port, () => resolve());
+      });
+    }
 
     this.httpServer = httpServer;
+    this.ownsHttpServer = !existingServer;
+    this.upgradeHandler = upgradeHandler;
     this.wss = wss;
     console.log(
-      `[realtime] hub listening on port ${this.config.port} at ${this.config.path}`
+      `[realtime] hub ${existingServer ? "attached to shared server" : `listening on port ${this.config.port}`} at ${this.config.path}`
     );
   }
 
@@ -120,14 +123,33 @@ export class RealtimeHub {
     this.handshaken.clear();
     const wss = this.wss;
     const httpServer = this.httpServer;
+    const ownsHttpServer = this.ownsHttpServer;
+    const upgradeHandler = this.upgradeHandler;
     this.wss = null;
     this.httpServer = null;
+    this.ownsHttpServer = false;
+    this.upgradeHandler = null;
+    if (httpServer && upgradeHandler) httpServer.off("upgrade", upgradeHandler);
     await new Promise<void>((resolve) => {
       wss.close(() => {
-        if (httpServer) httpServer.close(() => resolve());
+        if (httpServer && ownsHttpServer) httpServer.close(() => resolve());
         else resolve();
       });
     });
+  }
+
+  /** Handle the hub's HTTP endpoints before forwarding other requests to Next.js. */
+  handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse): boolean {
+    if (req.url === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok", connections: this.connections.size }));
+      return true;
+    }
+    if (req.url === "/publish" && req.method === "POST") {
+      this.handlePublishRequest(req, res);
+      return true;
+    }
+    return false;
   }
 
   // ─── Connection lifecycle ────────────────────────────────────────────────
@@ -259,10 +281,22 @@ export class RealtimeHub {
    * token; payloads contain only sanitized event data (no credentials).
    */
   private handlePublishRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+    console.log("[realtime-debug] /publish request received", {
+      method: req.method,
+      path: req.url,
+    });
+
     const expected = process.env.REALTIME_PUBLISH_TOKEN || "";
-    if (!expected || req.headers["x-publish-token"] !== expected) {
+    const authenticated = !!expected && req.headers["x-publish-token"] === expected;
+    console.log("[realtime-debug] /publish authentication result", {
+      authenticated,
+      hasExpectedToken: !!expected,
+      hasProvidedToken: typeof req.headers["x-publish-token"] === "string",
+    });
+    if (!authenticated) {
       res.writeHead(401);
       res.end();
+      console.log("[realtime-debug] /publish response", { status: 401 });
       return;
     }
 
@@ -277,14 +311,26 @@ export class RealtimeHub {
         if (!event || typeof event.name !== "string" || typeof event.companyId !== "string") {
           res.writeHead(400);
           res.end();
+          console.log("[realtime-debug] /publish response", { status: 400 });
           return;
         }
+        console.log("[realtime-debug] /publish event parsed", {
+          event: event.name,
+          companyId: event.companyId,
+        });
         const recipients = this.publish(event);
+        console.log("[realtime-debug] /publish publish result", {
+          event: event.name,
+          companyId: event.companyId,
+          matchingConnections: recipients,
+        });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ delivered: recipients }));
+        console.log("[realtime-debug] /publish response", { status: 200 });
       } catch {
         res.writeHead(400);
         res.end();
+        console.log("[realtime-debug] /publish response", { status: 400 });
       }
     });
   }
@@ -294,6 +340,7 @@ export class RealtimeHub {
     if (!this.wss) return 0;
     const groupName = `company:${event.companyId}`;
     let recipients = 0;
+    let selectedConnections = 0;
     const frame = JSON.stringify({
       type: 1,
       target: event.name,
@@ -307,10 +354,17 @@ export class RealtimeHub {
 
     for (const conn of this.connections.values()) {
       if (!conn.groups.includes(groupName)) continue;
+      selectedConnections++;
       if (conn.socket.readyState !== WebSocket.OPEN) continue;
       conn.socket.send(frame);
       recipients++;
     }
+    console.log("[realtime-debug] hub.publish completed", {
+      event: event.name,
+      targetGroup: groupName,
+      selectedConnections,
+      framesSent: recipients,
+    });
     return recipients;
   }
 }

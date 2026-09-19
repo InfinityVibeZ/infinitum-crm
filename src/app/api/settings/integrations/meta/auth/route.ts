@@ -124,11 +124,7 @@ export async function GET(request: Request) {
     //
     // The redirect URI is derived from the CURRENT REQUEST ORIGIN.
     //
-    // localhost:
-    // https://localhost:3000
-    // ->
-    // https://localhost:3000/api/settings/integrations/meta/callback
-    //
+  
     // Cloudflare:
     // https://lung-ppc-nest-andy.trycloudflare.com
     // ->
