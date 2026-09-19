@@ -40,6 +40,13 @@ export function emitInboxRealtime(event: RealtimeEvent): void {
           conversationId: event.conversationId ?? null,
         });
 
+        console.log("[realtime-debug] emitter before publishRealtimeEvent", {
+          event: event.name,
+          messageId: event.payload.messageId ?? null,
+          conversationId: event.conversationId ?? null,
+          companyId: event.companyId,
+        });
+
         return publishRealtimeEvent(event);
       })
       .then(() => {

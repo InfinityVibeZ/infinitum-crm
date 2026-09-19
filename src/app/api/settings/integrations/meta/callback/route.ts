@@ -59,8 +59,6 @@ export async function GET(request: Request) {
    *
    * Behind Cloudflare:
    *
-   * request.url:
-   *   https://localhost:3000/...
    *
    * x-forwarded-host:
    *   lung-ppc-nest-andy.trycloudflare.com
@@ -270,10 +268,7 @@ export async function GET(request: Request) {
      * Token exchange:
      * https://lung-ppc-nest-andy.trycloudflare.com/api/settings/integrations/meta/callback
      *
-     * NOT:
-     * https://localhost:3000/api/settings/integrations/meta/callback
-     */
-
+    
     const redirectUriSource = forwardedHost
       ? "x-forwarded-host"
       : "request-origin";
