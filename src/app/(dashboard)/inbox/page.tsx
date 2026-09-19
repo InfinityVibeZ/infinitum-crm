@@ -2,6 +2,17 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
+  startInboxRealtime,
+  stopInboxRealtime,
+  type InboxRealtimeHandlers,
+  type RealtimeConnectionState,
+} from "@/lib/inbox/realtime-client";
+import {
+  applyMessageToList,
+  applyConversationUpdated,
+  applyConversationRead,
+} from "@/lib/inbox/realtime-state";
+import {
   IconSend,
   IconUser,
   IconBrandInstagram,
@@ -75,6 +86,147 @@ export default function InboxPage() {
   const conversationsRef = useRef<Conversation[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
+
+  /*
+   * Phase 3.8.7.3 — SignalR realtime connection.
+   *
+   * Starts when the authenticated Inbox mounts, stops on unmount. Handlers
+   * are dedup-safe: merging is by stable id, and unknown conversations are
+   * never fabricated (REST remains the source of truth for anything not on
+   * the current page). Realtime failures can never affect fetching or
+   * sending — the client module swallows and logs them safely.
+   */
+  const [realtimeState, setRealtimeState] = useState<RealtimeConnectionState>("disconnected");
+  const selectedConversationIdRef = useRef<string | null>(null);
+  selectedConversationIdRef.current = selectedConversation?.id ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const handlers: InboxRealtimeHandlers = {
+      onStateChange: (state) => {
+        if (!cancelled) setRealtimeState(state);
+      },
+
+      // New inbound message from the webhook pipeline.
+      onNewMessage: (event) => {
+        const conversationId = typeof event.conversationId === "string" ? event.conversationId : "";
+        if (!conversationId) return;
+
+        const messageId = typeof event.messageId === "string" ? event.messageId : "";
+        const preview = typeof event.preview === "string" ? event.preview : "";
+        const createdAt = typeof event.createdAt === "string" ? event.createdAt : "";
+
+        // Viewing this conversation → append immediately (dedup by id);
+        // not viewing → list preview/unread updates via applyMessageToList.
+        if (conversationId === selectedConversationIdRef.current && messageId) {
+          setMessages((prev) =>
+            prev.some((m) => m.id === messageId)
+              ? prev
+              : [
+                  ...prev,
+                  {
+                    id: messageId,
+                    content: preview,
+                    direction: "INBOUND",
+                    created_at: createdAt || new Date().toISOString(),
+                    status: "SENT",
+                  },
+                ]
+          );
+          // FIX 2: the conversation is currently open — keep it READ.
+          markAsRead(conversationId);
+        }
+
+        setConversations((prev) =>
+          applyMessageToList(prev, {
+            conversationId,
+            messageId,
+            direction: typeof event.direction === "string" ? event.direction : "INBOUND",
+            preview,
+            createdAt,
+            lastMessageAt:
+              typeof event.lastMessageAt === "string" ? event.lastMessageAt : undefined,
+          })
+        );
+      },
+
+      // Conversation metadata changed (status/ordering).
+      onConversationUpdated: (event) => {
+        setConversations((prev) =>
+          applyConversationUpdated(prev, {
+            conversationId:
+              typeof event.conversationId === "string" ? event.conversationId : "",
+            status: typeof event.status === "string" ? event.status : undefined,
+            lastMessageAt:
+              typeof event.lastMessageAt === "string" ? event.lastMessageAt : undefined,
+            lastMessagePreview:
+              typeof event.lastMessagePreview === "string" ? event.lastMessagePreview : undefined,
+          })
+        );
+      },
+
+      // Our own outbound message (echoed from another tab). Never duplicate —
+      // the sending tab already appended it from the REST response.
+      onOutboundMessage: (event) => {
+        const conversationId = typeof event.conversationId === "string" ? event.conversationId : "";
+        if (!conversationId) return;
+        const messageId = typeof event.messageId === "string" ? event.messageId : "";
+
+        if (conversationId === selectedConversationIdRef.current && messageId) {
+          setMessages((prev) =>
+            prev.some((m) => m.id === messageId)
+              ? prev
+              : [
+                  ...prev,
+                  {
+                    id: messageId,
+                    content: typeof event.preview === "string" ? event.preview : "",
+                    direction: "OUTBOUND",
+                    created_at:
+                      typeof event.createdAt === "string"
+                        ? event.createdAt
+                        : new Date().toISOString(),
+                    status: typeof event.status === "string" ? event.status : "SENT",
+                  },
+                ]
+          );
+        }
+
+        setConversations((prev) =>
+          applyMessageToList(prev, {
+            conversationId,
+            messageId,
+            direction: "OUTBOUND",
+            preview: typeof event.preview === "string" ? event.preview : "",
+            createdAt: typeof event.createdAt === "string" ? event.createdAt : undefined,
+            lastMessageAt:
+              typeof event.lastMessageAt === "string" ? event.lastMessageAt : undefined,
+          })
+        );
+      },
+
+      // Read receipts from other tabs/sessions — local state only, no REST.
+      onConversationRead: (event) => {
+        setConversations((prev) =>
+          applyConversationRead(prev, {
+            conversationId:
+              typeof event.conversationId === "string" ? event.conversationId : "",
+            readAt: typeof event.readAt === "string" ? event.readAt : undefined,
+          })
+        );
+      },
+    };
+
+    startInboxRealtime(handlers);
+
+    return () => {
+      cancelled = true;
+      stopInboxRealtime();
+    };
+    // Start once per mount; handlers close over stable setters only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Phase 3.8.6 — search debounce: raw input -> debounced query after 300ms.
   useEffect(() => {
@@ -522,6 +674,27 @@ export default function InboxPage() {
               <h1 className="text-base font-semibold text-nexus-text tracking-tight">
                 Inbox
               </h1>
+              {/* Realtime connection status — subtle, non-intrusive. */}
+              <span
+                role="status"
+                aria-label={`Realtime connection ${realtimeState}`}
+                title={
+                  realtimeState === "connected"
+                    ? "Live updates connected"
+                    : realtimeState === "reconnecting"
+                      ? "Reconnecting to live updates…"
+                      : realtimeState === "connecting"
+                        ? "Connecting to live updates…"
+                        : "Live updates offline — using manual refresh"
+                }
+                className={`ml-1 w-2 h-2 rounded-full shrink-0 ${
+                  realtimeState === "connected"
+                    ? "bg-emerald-500"
+                    : realtimeState === "reconnecting" || realtimeState === "connecting"
+                      ? "bg-amber-400 animate-pulse"
+                      : "bg-nexus-muted/50"
+                }`}
+              />
             </div>
             <span className="text-xs text-nexus-muted tabular-nums">
               {conversations.length}{" "}

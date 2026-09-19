@@ -1,0 +1,28 @@
+[realtime] hub listening on port 5001 at /hubs/inbox
+[realtime] broadcast new_message 920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 491c331a-3a73-429a-b803-382e06e2d08c
+[realtime] broadcast conversation_updated 920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 491c331a-3a73-429a-b803-382e06e2d08c
+[realtime] connected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 company=920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 connectionId=49c7cf8d-5fd1-4b27-811f-92a8c1f6cad3
+[realtime] broadcast conversation_read 920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 491c331a-3a73-429a-b803-382e06e2d08c
+[realtime] disconnected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 connectionId=49c7cf8d-5fd1-4b27-811f-92a8c1f6cad3
+[realtime] connected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 company=920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 connectionId=605869d8-eb20-49b6-8d69-beb11865b5fb
+[realtime] disconnected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 connectionId=605869d8-eb20-49b6-8d69-beb11865b5fb
+[realtime] connected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 company=920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 connectionId=57f594f4-fc7c-4746-991c-244749ae3184
+[realtime] disconnected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 connectionId=57f594f4-fc7c-4746-991c-244749ae3184
+[realtime] connected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 company=920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 connectionId=47357636-6f24-41c7-ad76-3e9157fdf009
+[realtime] disconnected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 connectionId=47357636-6f24-41c7-ad76-3e9157fdf009
+[realtime] connected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 company=920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 connectionId=c148eb94-a860-4ab3-9b9b-5e73955b192e
+[realtime] broadcast conversation_read 920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 491c331a-3a73-429a-b803-382e06e2d08c
+[realtime] disconnected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 connectionId=c148eb94-a860-4ab3-9b9b-5e73955b192e
+[realtime] broadcast conversation_read 920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 491c331a-3a73-429a-b803-382e06e2d08c
+[realtime] connected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 company=920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 connectionId=ad2593d2-4724-425f-ac21-e48d0d10bb00
+[realtime] disconnected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 connectionId=ad2593d2-4724-425f-ac21-e48d0d10bb00
+[realtime] connected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 company=920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 connectionId=94a944dd-c013-4fe4-90b5-2c5bfdcedbf1
+[realtime] broadcast conversation_read 920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 491c331a-3a73-429a-b803-382e06e2d08c
+[realtime] disconnected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 connectionId=94a944dd-c013-4fe4-90b5-2c5bfdcedbf1
+[realtime] connected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 company=920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 connectionId=682c6a0c-c1b1-41cf-b0db-ad58145dbdd7
+[realtime] broadcast conversation_read 920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 491c331a-3a73-429a-b803-382e06e2d08c
+[realtime] disconnected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 connectionId=682c6a0c-c1b1-41cf-b0db-ad58145dbdd7
+[realtime] connected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 company=920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 connectionId=b723e232-9949-4409-8f76-08786937bb6b
+[realtime] disconnected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 connectionId=b723e232-9949-4409-8f76-08786937bb6b
+[realtime] connected userId=65d4b510-7e5b-410f-9a57-118f22e2ee51 company=920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 connectionId=edeb0e09-6514-46c3-b8e0-3bcd91190e2f
+[realtime] broadcast conversation_read 920bf1bd-4b8d-46e5-ac3b-4c3faefc5f92 491c331a-3a73-429a-b803-382e06e2d08c

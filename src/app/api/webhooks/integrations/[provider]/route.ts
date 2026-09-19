@@ -173,22 +173,52 @@ export async function POST(
         })),
       });
 
-      console.log("[WebhookRoute] Calling receiveWebhookEvents...");
-
-      const savedEvents = await receiveWebhookEvents(
+      console.log("[REALTIME DEBUG] WEBHOOK: BEFORE receiveWebhookEvents", {
         providerId,
-        events
-      );
-
-      console.log("[WebhookRoute] Gateway completed:", {
-        savedCount: savedEvents.length,
-        saved: savedEvents.map((event) => ({
-          id: event.id,
-          status: event.status,
+        eventCount: events.length,
+        events: events.map((event) => ({
+          externalEventId: event.externalEventId,
           eventType: event.eventType,
-          integrationId: event.integrationId,
+          accountId: event.accountId,
         })),
       });
+
+      let savedEvents;
+
+      try {
+        savedEvents = await receiveWebhookEvents(
+          providerId,
+          events
+        );
+
+        console.log("[REALTIME DEBUG] WEBHOOK: AFTER receiveWebhookEvents", {
+          providerId,
+          savedCount: savedEvents.length,
+          saved: savedEvents.map((event) => ({
+            id: event.id,
+            status: event.status,
+            eventType: event.eventType,
+            integrationId: event.integrationId,
+          })),
+        });
+      } catch (error) {
+        console.error(
+          "[REALTIME DEBUG] WEBHOOK: receiveWebhookEvents FAILED",
+          {
+            providerId,
+            error:
+              error instanceof Error
+                ? {
+                  name: error.name,
+                  message: error.message,
+                  stack: error.stack,
+                }
+                : String(error),
+          }
+        );
+
+        throw error;
+      }
     } else {
       console.warn(`[WebhookRoute] Provider ${providerId} does not implement extractEvents.`);
     }
