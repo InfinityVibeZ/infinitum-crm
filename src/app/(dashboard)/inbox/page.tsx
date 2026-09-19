@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   IconSend,
   IconUser,
   IconBrandInstagram,
   IconBrandFacebook,
   IconMessage,
+  IconSearch,
+  IconArrowBack,
+  IconInbox,
+  IconAlertCircle,
+  IconCheck,
 } from "@tabler/icons-react";
 
 interface InstagramProfile {
@@ -31,6 +36,7 @@ interface Message {
   content: string;
   direction: string;
   created_at: string;
+  status?: string; // UI-only: "SENT" | "FAILED" | … (rendering distinction)
 }
 
 interface Conversation {
@@ -58,9 +64,38 @@ export default function InboxPage() {
   // the messages of the currently selected conversation.
   const messagesRequestRef = useRef(0);
 
+  // Phase 3.8.6 — Inbox Productivity state.
+  const [searchInput, setSearchInput] = useState(""); // raw input
+  const [search, setSearch] = useState(""); // debounced value sent to API
+  const [filter, setFilter] = useState<"all" | "unread" | "channel">("all");
+  const [channel, setChannel] = useState<string>("INSTAGRAM");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const listRequestRef = useRef(0);
+  const conversationsRef = useRef<Conversation[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
+
+  // Phase 3.8.6 — search debounce: raw input -> debounced query after 300ms.
   useEffect(() => {
-    fetchConversations();
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Initial load.
+  useEffect(() => {
+    fetchConversations(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Phase 3.8.6 — refetch (reset) whenever filters or the debounced
+  // search change.
+  useEffect(() => {
+    fetchConversations(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filter, channel]);
 
   useEffect(() => {
     if (!selectedConversation) {
@@ -81,11 +116,42 @@ export default function InboxPage() {
     ) {
       markAsRead(selectedConversation.id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversation]);
 
-  const fetchConversations = async () => {
+  /*
+   * Phase 3.8.6 — Conversation list fetching.
+   *
+   * - reset=true  → replace the list (initial load / filter / search change).
+   * - reset=false → append the next page (infinite scroll) using nextCursor.
+   *
+   * The stale-request guard mirrors the messages pane pattern:
+   * only the latest request may update state.
+   */
+  const fetchConversations = async (reset: boolean = true) => {
+    const requestId = ++listRequestRef.current;
+
+    if (reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+
     try {
-      const res = await fetch("/api/inbox/conversations");
+      const params = new URLSearchParams();
+      if (!reset && nextCursor) {
+        params.set("cursor", nextCursor);
+      }
+      if (search) {
+        params.set("search", search);
+      }
+      if (filter === "channel") {
+        params.set("filter", "channel");
+        params.set("channel", channel);
+      }
+
+      const qs = params.toString();
+      const res = await fetch(`/api/inbox/conversations${qs ? `?${qs}` : ""}`);
 
       if (!res.ok) {
         throw new Error(`Failed to fetch conversations: ${res.status}`);
@@ -93,13 +159,42 @@ export default function InboxPage() {
 
       const data = await res.json();
 
-      if (data.conversations) {
-        setConversations(data.conversations);
+      // Ignore stale responses (user changed filters while this was in flight).
+      if (requestId !== listRequestRef.current) {
+        return;
       }
+
+      const page: Conversation[] = data.conversations || [];
+
+      if (reset) {
+        setConversations(page);
+      } else {
+        // Append, de-duplicating by id in case of cursor overlap races.
+        setConversations((prev) => {
+          const seen = new Set(prev.map((c) => c.id));
+          return [...prev, ...page.filter((c) => !seen.has(c.id))];
+        });
+      }
+
+      setNextCursor(data.nextCursor ?? null);
+      conversationsRef.current =
+        reset
+          ? page
+          : [
+              ...conversationsRef.current.filter(
+                (c) => !page.some((p) => p.id === c.id)
+              ),
+              ...page,
+            ];
     } catch (error) {
-      console.error("Failed to fetch conversations", error);
+      if (requestId === listRequestRef.current) {
+        console.error("Failed to fetch conversations", error);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   };
 
@@ -270,6 +365,13 @@ export default function InboxPage() {
     }
   };
 
+  // Phase 3.8.6 — auto-scroll the messages pane to the latest message.
+  useEffect(() => {
+    if (threadRef.current) {
+      threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    }
+  }, [messages, selectedConversation?.id]);
+
   const isUnread = (conv: Conversation) => {
     if (!conv.last_message_at) return false;
 
@@ -281,31 +383,62 @@ export default function InboxPage() {
     return new Date(lastReadAt) < lastMsgDate;
   };
 
-  const renderChannelIcon = (channel: string) => {
+  /*
+   * Phase 3.8.6 — Unread tab.
+   *
+   * SAFETY: the canonical unread definition remains metadata.lastReadAt vs
+   * last_message_at (client-side). Conversation.status is NOT used — the
+   * pipeline never sets it to UNREAD, so a server-side unread filter would
+   * be a different (incorrect) definition. Documented limitation: the
+   * Unread tab filters pages the client has already loaded; more unread
+   * conversations may exist beyond the loaded pages — use infinite scroll
+   * to load more.
+   */
+  const visibleConversations =
+    filter === "unread"
+      ? conversations.filter(isUnread)
+      : conversations;
+
+  const unreadCount = conversations.filter(isUnread).length;
+
+  // Phase 3.8.6 — relative time for list metadata ("2m", "3h", "5d").
+  const relativeTime = (iso: string | null) => {
+    if (!iso) return "";
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return "now";
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d`;
+    return new Date(iso).toLocaleDateString();
+  };
+
+  // UI-only: full date separator label between messages.
+  const dateSeparatorLabel = (iso: string) => {
+    const d = new Date(iso);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    if (d.toDateString() === today.toDateString()) return "Today";
+    if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+    return d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: d.getFullYear() === today.getFullYear() ? undefined : "numeric",
+    });
+  };
+
+  const renderChannelIcon = (channel: string, size = 14) => {
     switch (channel.toUpperCase()) {
       case "INSTAGRAM":
-        return (
-          <IconBrandInstagram
-            size={16}
-            className="text-pink-500"
-          />
-        );
-
+        return <IconBrandInstagram size={size} className="text-pink-400" />;
       case "FACEBOOK":
-        return (
-          <IconBrandFacebook
-            size={16}
-            className="text-blue-500"
-          />
-        );
-
+        return <IconBrandFacebook size={size} className="text-blue-400" />;
       default:
-        return (
-          <IconMessage
-            size={16}
-            className="text-gray-400"
-          />
-        );
+        return <IconMessage size={size} className="text-nexus-muted" />;
     }
   };
 
@@ -320,181 +453,488 @@ export default function InboxPage() {
     );
   };
 
+  // UI-only: deterministic initials avatar.
+  const Avatar = ({
+    name,
+    size = "md",
+  }: {
+    name: string;
+    size?: "sm" | "md";
+  }) => {
+    const initials = (name || "?")
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]!.toUpperCase())
+      .join("");
+
+    const dims =
+      size === "sm" ? "w-8 h-8 text-[11px]" : "w-10 h-10 text-sm";
+
+    return (
+      <div
+        aria-hidden="true"
+        className={`${dims} shrink-0 rounded-full bg-nexus-hover border border-nexus-border flex items-center justify-center font-semibold text-nexus-text-secondary select-none`}
+      >
+        {initials}
+      </div>
+    );
+  };
+
+  // UI-only: subtle custom scrollbar classes.
+  const scrollAreaClass = "inbox-scroll";
+
   return (
-    <div className="flex h-full bg-nexus-bg">
-      {/* Sidebar: Conversation List */}
-      <div className="w-1/3 border-r border-nexus-border bg-nexus-card flex flex-col">
-        <div className="p-4 border-b border-nexus-border">
-          <h2 className="text-lg font-bold text-nexus-text">
-            Inbox
-          </h2>
-        </div>
+    <div className="flex flex-1 min-h-0 overflow-hidden overflow-x-hidden bg-nexus-bg">
+      <style jsx global>{`
+        .inbox-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: #232b40 transparent;
+        }
+        .inbox-scroll::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        .inbox-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .inbox-scroll::-webkit-scrollbar-thumb {
+          background-color: #232b40;
+          border-radius: 9999px;
+        }
+        .inbox-scroll::-webkit-scrollbar-thumb:hover {
+          background-color: #2e3852;
+        }
+      `}</style>
 
-        <div className="flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="p-4 text-center text-nexus-muted">
-              Loading...
+      {/* ─────────────────── Sidebar: Conversation List ─────────────────── */}
+      <aside
+        aria-label="Conversation list"
+        className={`w-full md:w-[360px] lg:w-[400px] shrink-0 border-r border-nexus-border bg-nexus-card flex flex-col min-h-0 overflow-hidden ${
+          selectedConversation ? "hidden md:flex" : "flex"
+        }`}
+      >
+        {/* Panel header */}
+        <div className="px-4 pt-4 pb-3 border-b border-nexus-border shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <IconInbox size={18} className="text-nexus-text-secondary" />
+              <h1 className="text-base font-semibold text-nexus-text tracking-tight">
+                Inbox
+              </h1>
             </div>
-          ) : conversations.length === 0 ? (
-            <div className="p-4 text-center text-nexus-muted">
-              No conversations found
-            </div>
-          ) : (
-            conversations.map((conv) => {
-              const unread = isUnread(conv);
-              const isSelected =
-                selectedConversation?.id === conv.id;
+            <span className="text-xs text-nexus-muted tabular-nums">
+              {conversations.length}{" "}
+              {conversations.length === 1 ? "conversation" : "conversations"}
+              {unreadCount > 0 && (
+                <span className="ml-2 inline-flex items-center gap-1 text-blue-400">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full bg-blue-400"
+                    aria-hidden="true"
+                  />
+                  {unreadCount} unread
+                </span>
+              )}
+            </span>
+          </div>
 
-              const instagramUsername =
-                getInstagramUsername(conv);
+          {/* Search (debounced 300ms) */}
+          <div className="relative">
+            <IconSearch
+              size={15}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-nexus-muted pointer-events-none"
+            />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search conversations…"
+              aria-label="Search conversations"
+              className="w-full bg-nexus-bg border border-nexus-border rounded-lg pl-9 pr-3 py-2 text-sm text-nexus-text placeholder:text-nexus-muted/70 outline-none transition-colors focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/30"
+            />
+          </div>
 
+          {/* Filter chips */}
+          <div
+            role="tablist"
+            aria-label="Filter conversations"
+            className="flex gap-1.5 mt-3"
+          >
+            {(
+              [
+                { key: "all", label: "All" },
+                { key: "unread", label: "Unread" },
+                { key: "channel", label: "Instagram" },
+              ] as const
+            ).map((tab) => {
+              const active = filter === tab.key;
               return (
-                <div
-                  key={conv.id}
-                  onClick={() => {
-                    if (selectedConversation?.id !== conv.id) {
-                      setSelectedConversation(conv);
-                    }
-                  }}
-                  className={`p-4 border-b border-nexus-border/50 cursor-pointer hover:bg-nexus-hover transition-colors ${
-                    isSelected
-                      ? "bg-nexus-hover/80"
-                      : ""
+                <button
+                  key={tab.key}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setFilter(tab.key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
+                    active
+                      ? "bg-blue-600/90 border-blue-500/60 text-white"
+                      : "bg-transparent border-nexus-border text-nexus-muted hover:text-nexus-text hover:bg-nexus-hover"
                   }`}
                 >
-                  <div className="flex justify-between items-start mb-1">
-                    <div className="flex items-center gap-2 font-semibold text-nexus-text">
-                      <div className="flex flex-col min-w-0">
-                        <span className="truncate">
-                          {conv.contact.name ||
-                            "Unknown Contact"}
-                        </span>
+                  {tab.key === "channel" && (
+                    <IconBrandInstagram
+                      size={12}
+                      className="inline-block mr-1 -mt-0.5"
+                    />
+                  )}
+                  {tab.label}
+                  {tab.key === "unread" && unreadCount > 0 && (
+                    <span
+                      className={`ml-1.5 tabular-nums ${
+                        active ? "text-blue-100" : "text-blue-400"
+                      }`}
+                    >
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Conversation list — independent scroll area */}
+        <div className={`flex-1 min-h-0 overflow-y-auto ${scrollAreaClass}`}>
+          {loading ? (
+            /* Loading skeleton */
+            <div className="divide-y divide-nexus-border/60" aria-hidden="true">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex gap-3 p-4 animate-pulse">
+                  <div className="w-10 h-10 rounded-full bg-nexus-hover shrink-0" />
+                  <div className="flex-1 space-y-2 py-0.5">
+                    <div className="flex justify-between gap-2">
+                      <div className="h-3 w-28 rounded bg-nexus-hover" />
+                      <div className="h-2.5 w-8 rounded bg-nexus-hover" />
+                    </div>
+                    <div className="h-3 w-full rounded bg-nexus-hover/70" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : visibleConversations.length === 0 ? (
+            /* Empty state */
+            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+              <div className="w-12 h-12 rounded-full bg-nexus-hover flex items-center justify-center mb-3">
+                <IconInbox size={22} className="text-nexus-muted" />
+              </div>
+              <p className="text-sm font-medium text-nexus-text-secondary">
+                {search
+                  ? "No matching conversations"
+                  : filter === "unread" && conversations.length > 0
+                    ? "You're all caught up"
+                    : "No conversations yet"}
+              </p>
+              <p className="mt-1 text-xs text-nexus-muted">
+                {search
+                  ? "Try a different search term."
+                  : filter === "unread" && conversations.length > 0
+                    ? "No unread messages right now."
+                    : "New customer messages will appear here."}
+              </p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-nexus-border/60" role="list">
+              {visibleConversations.map((conv) => {
+                const unread = isUnread(conv);
+                const isSelected = selectedConversation?.id === conv.id;
+                const instagramUsername = getInstagramUsername(conv);
+                const lastMsg = conv.messages?.[0];
+                const isOutboundPreview =
+                  lastMsg?.direction === "OUTBOUND";
+                const displayName =
+                  conv.contact.name || "Unknown Contact";
+
+                return (
+                  <li key={conv.id} role="listitem">
+                    <button
+                      onClick={() => {
+                        if (selectedConversation?.id !== conv.id) {
+                          setSelectedConversation(conv);
+                        }
+                      }}
+                      aria-current={isSelected ? "true" : undefined}
+                      aria-label={`Conversation with ${displayName}${
+                        unread ? ", unread" : ""
+                      }`}
+                      className={`w-full text-left flex gap-3 px-4 py-3.5 transition-colors focus:outline-none focus-visible:bg-nexus-hover ${
+                        isSelected
+                          ? "bg-blue-600/10 border-l-2 border-blue-500 -ml-0 pl-[calc(1rem-2px)]"
+                          : "border-l-2 border-transparent hover:bg-nexus-hover/60"
+                      }`}
+                    >
+                      <Avatar name={displayName} />
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span
+                            className={`truncate text-sm ${
+                              unread
+                                ? "font-semibold text-nexus-text"
+                                : "font-medium text-nexus-text/90"
+                            }`}
+                          >
+                            {displayName}
+                          </span>
+                          <span className="text-[11px] text-nexus-muted shrink-0 tabular-nums">
+                            {relativeTime(conv.last_message_at)}
+                          </span>
+                        </div>
 
                         {instagramUsername && (
-                          <span className="text-xs font-normal text-nexus-muted truncate">
+                          <div className="text-[11px] text-nexus-muted truncate -mt-0.5">
                             @{instagramUsername}
-                          </span>
+                          </div>
                         )}
+
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span
+                            className="text-nexus-muted shrink-0"
+                            title={conv.channel}
+                          >
+                            {renderChannelIcon(conv.channel)}
+                          </span>
+                          <p
+                            className={`text-[13px] truncate ${
+                              unread
+                                ? "text-nexus-text-secondary font-medium"
+                                : "text-nexus-muted"
+                            }`}
+                          >
+                            {lastMsg?.content
+                              ? `${
+                                  isOutboundPreview ? "You: " : ""
+                                }${lastMsg.content}`
+                              : "No messages yet"}
+                          </p>
+                        </div>
                       </div>
 
-                      {renderChannelIcon(conv.channel)}
-                    </div>
+                      {/* Unread dot + text label (not color-only) */}
+                      {unread && (
+                        <span
+                          className="shrink-0 self-center flex flex-col items-center gap-1"
+                          aria-label="Unread"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
-                    {unread && (
-                      <div className="w-2 h-2 rounded-full bg-blue-500 mt-1" />
-                    )}
-                  </div>
-
-                  <div className="text-sm text-nexus-muted truncate">
-                    {conv.messages?.[0]?.content ||
-                      "No messages yet"}
-                  </div>
-
-                  <div className="text-xs text-nexus-muted/70 mt-2">
-                    {conv.last_message_at
-                      ? new Date(
-                          conv.last_message_at
-                        ).toLocaleString()
-                      : ""}
-                  </div>
-                </div>
-              );
-            })
+          {/* Infinite scroll sentinel + footer */}
+          {!loading && visibleConversations.length > 0 && (
+            <div
+              ref={(node) => {
+                if (!node) return;
+                const observer = new IntersectionObserver(
+                  (entries) => {
+                    if (
+                      entries[0].isIntersecting &&
+                      nextCursor &&
+                      !loadingMore &&
+                      filter !== "unread"
+                    )
+                      fetchConversations(false);
+                  },
+                  { rootMargin: "100px" }
+                );
+                observer.observe(node);
+                return () => observer.disconnect();
+              }}
+              className="py-3 text-center text-[11px] text-nexus-muted/70"
+            >
+              {loadingMore ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-3 h-3 border-2 border-nexus-border border-t-blue-500 rounded-full animate-spin" />
+                  Loading…
+                </span>
+              ) : nextCursor && filter !== "unread" ? (
+                ""
+              ) : (
+                "End of conversations"
+              )}
+            </div>
+          )}
+          {filter === "unread" && nextCursor && !loading && (
+            <div className="py-3 text-center text-[11px] text-nexus-muted/70">
+              Showing loaded conversations —{" "}
+              <button
+                className="underline underline-offset-2 hover:text-nexus-text focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 rounded"
+                onClick={() => fetchConversations(false)}
+              >
+                load more
+              </button>
+            </div>
           )}
         </div>
-      </div>
+      </aside>
 
-      {/* Main Area: Chat Window */}
-      <div className="w-2/3 flex flex-col bg-nexus-bg">
+      {/* ─────────────────── Main Area: Conversation View ─────────────────── */}
+      <section
+        aria-label="Active conversation"
+        className={`flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col bg-nexus-bg ${
+          selectedConversation ? "flex" : "hidden md:flex"
+        }`}
+      >
         {selectedConversation ? (
           <>
-            {/* Chat Header */}
-            <div className="p-4 border-b border-nexus-border bg-nexus-card flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-nexus-hover flex items-center justify-center">
-                  <IconUser
-                    size={20}
-                    className="text-nexus-text"
-                  />
-                </div>
+            {/* Conversation header — fixed */}
+            <header className="shrink-0 px-4 py-3 border-b border-nexus-border bg-nexus-card flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {/* Mobile back */}
+                <button
+                  className="md:hidden -ml-1 p-1.5 rounded-lg text-nexus-muted hover:text-nexus-text hover:bg-nexus-hover transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                  onClick={() => setSelectedConversation(null)}
+                  aria-label="Back to conversations"
+                >
+                  <IconArrowBack size={18} />
+                </button>
 
-                <div>
-                  <h3 className="font-bold text-nexus-text">
-                    {selectedConversation.contact.name}
-                  </h3>
+                <Avatar
+                  name={selectedConversation.contact.name || "Unknown Contact"}
+                />
 
-                  {getInstagramUsername(
-                    selectedConversation
-                  ) && (
-                    <div className="text-xs text-nexus-muted mb-1">
-                      @
-                      {getInstagramUsername(
-                        selectedConversation
-                      )}
-                    </div>
-                  )}
-
-                  <div className="text-sm text-nexus-muted flex items-center gap-1">
-                    {renderChannelIcon(
-                      selectedConversation.channel
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-nexus-text truncate leading-tight">
+                    {selectedConversation.contact.name || "Unknown Contact"}
+                  </h2>
+                  <div className="flex items-center gap-1.5 text-xs text-nexus-muted mt-0.5">
+                    {renderChannelIcon(selectedConversation.channel, 12)}
+                    {getInstagramUsername(selectedConversation) ? (
+                      <span className="truncate">
+                        @{getInstagramUsername(selectedConversation)}
+                      </span>
+                    ) : (
+                      <span className="capitalize truncate">
+                        {selectedConversation.channel.toLowerCase()}
+                      </span>
                     )}
-
-                    <span className="capitalize">
-                      {selectedConversation.channel.toLowerCase()}
-                    </span>
                   </div>
                 </div>
               </div>
-            </div>
+            </header>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Message thread — the ONLY vertical scroll area in the panel */}
+            <div
+              ref={threadRef}
+              className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-1 ${scrollAreaClass}`}
+            >
               {messagesLoading ? (
-                <div className="text-center text-nexus-muted">
-                  Loading messages...
-                </div>
-              ) : messages.length === 0 ? (
-                <div className="text-center text-nexus-muted">
-                  No messages
-                </div>
-              ) : (
-                messages.map((msg) => {
-                  const isOutbound =
-                    msg.direction === "OUTBOUND";
-
-                  return (
+                <div className="space-y-3" aria-hidden="true">
+                  {[70, 45, 60].map((w, i) => (
                     <div
-                      key={msg.id}
+                      key={i}
                       className={`flex ${
-                        isOutbound
-                          ? "justify-end"
-                          : "justify-start"
+                        i % 2 ? "justify-end" : "justify-start"
                       }`}
                     >
                       <div
-                        className={`max-w-[70%] rounded-2xl p-3 ${
-                          isOutbound
-                            ? "bg-blue-600 text-white rounded-tr-sm"
-                            : "bg-nexus-card text-nexus-text border border-nexus-border rounded-tl-sm"
+                        className="h-9 rounded-2xl bg-nexus-hover/70 animate-pulse"
+                        style={{ width: `${w}%`, maxWidth: "70%" }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-nexus-hover flex items-center justify-center">
+                    <IconMessage size={18} className="text-nexus-muted" />
+                  </div>
+                  <p className="text-sm text-nexus-text-secondary">No messages yet</p>
+                  <p className="text-xs text-nexus-muted">
+                    Messages in this conversation will appear here.
+                  </p>
+                </div>
+              ) : (
+                messages.map((msg, idx) => {
+                  const isOutbound = msg.direction === "OUTBOUND";
+                  const isFailed = msg.status === "FAILED";
+
+                  // Date separator when the day changes.
+                  const prev = idx > 0 ? messages[idx - 1] : null;
+                  const showDateSep =
+                    !prev ||
+                    new Date(prev.created_at).toDateString() !==
+                      new Date(msg.created_at).toDateString();
+
+                  return (
+                    <div key={msg.id}>
+                      {showDateSep && (
+                        <div
+                          className="flex items-center gap-3 py-3"
+                          role="separator"
+                          aria-label={dateSeparatorLabel(msg.created_at)}
+                        >
+                          <div className="flex-1 h-px bg-nexus-border" />
+                          <span className="text-[11px] font-medium text-nexus-muted px-1">
+                            {dateSeparatorLabel(msg.created_at)}
+                          </span>
+                          <div className="flex-1 h-px bg-nexus-border" />
+                        </div>
+                      )}
+
+                      <div
+                        className={`flex px-0.5 py-0.5 ${
+                          isOutbound ? "justify-end" : "justify-start"
                         }`}
                       >
-                        <p className="whitespace-pre-wrap text-sm">
-                          {msg.content}
-                        </p>
-
                         <div
-                          className={`text-[10px] mt-1 text-right ${
-                            isOutbound
-                              ? "text-white/70"
-                              : "text-nexus-muted"
+                          className={`max-w-[75%] sm:max-w-[70%] rounded-2xl px-3.5 py-2.5 ${
+                            isFailed
+                              ? "bg-red-500/10 border border-red-500/40"
+                              : isOutbound
+                                ? "bg-blue-600 text-white rounded-br-sm"
+                                : "bg-nexus-card border border-nexus-border text-nexus-text rounded-bl-sm"
                           }`}
                         >
-                          {new Date(
-                            msg.created_at
-                          ).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                            {msg.content}
+                          </p>
+
+                          <div
+                            className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
+                              isFailed
+                                ? "text-red-400"
+                                : isOutbound
+                                  ? "text-white/60"
+                                  : "text-nexus-muted"
+                            }`}
+                          >
+                            {/* Failed state: icon + label, not color-only */}
+                            {isFailed && (
+                              <>
+                                <IconAlertCircle size={11} aria-hidden="true" />
+                                <span>Failed to send</span>
+                                <span aria-hidden="true">·</span>
+                              </>
+                            )}
+                            <time dateTime={msg.created_at}>
+                              {new Date(msg.created_at).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </time>
+                            {isOutbound && !isFailed && (
+                              <IconCheck
+                                size={11}
+                                aria-hidden="true"
+                                className="opacity-70"
+                              />
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -503,37 +943,47 @@ export default function InboxPage() {
               )}
             </div>
 
-            {/* Input Area — Phase 3.8.5: outbound enabled for Instagram */}
-            <div className="p-4 bg-nexus-card border-t border-nexus-border">
+            {/* Composer — fixed at the bottom, never scrolls away */}
+            <div className="shrink-0 border-t border-nexus-border bg-nexus-card px-4 py-3">
               {sendError && (
-                <div className="mb-2 text-xs text-red-500">{sendError}</div>
+                <div
+                  role="alert"
+                  className="mb-2 flex items-center gap-1.5 text-xs text-red-400"
+                >
+                  <IconAlertCircle size={13} aria-hidden="true" />
+                  {sendError}
+                </div>
               )}
               {canSend(selectedConversation) ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
+                <div className="flex items-end gap-2">
+                  <textarea
+                    rows={1}
                     value={replyText}
-                    onChange={(e) =>
-                      setReplyText(e.target.value)
-                    }
+                    onChange={(e) => setReplyText(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         sendMessage();
                       }
                     }}
-                    placeholder="Type a message..."
+                    placeholder="Type a message…"
+                    aria-label="Message text"
                     maxLength={1000}
-                    className="flex-1 bg-nexus-bg border border-nexus-border rounded-lg px-4 py-2 text-nexus-text outline-none"
+                    className="flex-1 resize-none bg-nexus-bg border border-nexus-border rounded-xl px-3.5 py-2.5 text-sm text-nexus-text placeholder:text-nexus-muted/70 outline-none transition-colors focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/30 disabled:opacity-50 max-h-32"
                     disabled={sending}
                   />
 
                   <button
-                    className="p-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                    className="shrink-0 p-2.5 bg-blue-600 text-white rounded-xl transition-colors hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     onClick={sendMessage}
                     disabled={sending || !replyText.trim()}
+                    aria-label={sending ? "Sending message" : "Send message"}
                   >
-                    <IconSend size={20} />
+                    {sending ? (
+                      <span className="block w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <IconSend size={18} />
+                    )}
                   </button>
                 </div>
               ) : (
@@ -544,30 +994,37 @@ export default function InboxPage() {
                   <input
                     type="text"
                     placeholder="Outbound messaging only supported for Instagram conversations"
-                    className="flex-1 bg-nexus-bg border border-nexus-border rounded-lg px-4 py-2 text-nexus-text outline-none"
+                    aria-label="Messaging unavailable for this channel"
+                    className="flex-1 bg-nexus-bg border border-nexus-border rounded-xl px-3.5 py-2.5 text-sm text-nexus-text outline-none"
                     disabled
                   />
-
                   <button
-                    className="p-2 bg-blue-600 text-white rounded-lg"
+                    className="shrink-0 p-2.5 bg-blue-600 text-white rounded-xl opacity-40 cursor-not-allowed"
                     disabled
+                    aria-label="Send unavailable"
                   >
-                    <IconSend size={20} />
+                    <IconSend size={18} />
                   </button>
                 </div>
               )}
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-nexus-muted flex-col gap-4">
-            <IconMessage
-              size={48}
-              className="opacity-20"
-            />
-            <p>Select a conversation to view messages</p>
+          /* Empty state — no conversation selected */
+          <div className="flex-1 flex-col items-center justify-center text-center gap-3 hidden md:flex">
+            <div className="w-16 h-16 rounded-full bg-nexus-hover flex items-center justify-center">
+              <IconMessage size={26} className="text-nexus-muted/70" />
+            </div>
+            <p className="text-sm font-medium text-nexus-text-secondary">
+              Select a conversation
+            </p>
+            <p className="text-xs text-nexus-muted max-w-[260px]">
+              Choose a conversation from the list to view the message history
+              and reply.
+            </p>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
