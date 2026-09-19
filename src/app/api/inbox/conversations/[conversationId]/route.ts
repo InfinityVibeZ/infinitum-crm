@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedUser } from "@/lib/auth";
 
-export async function GET(req: NextRequest, { params }: { params: { conversationId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
     const authResult = await requireAuthenticatedUser(req);
     if (authResult instanceof Response) return authResult;
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: { conversation
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { conversationId } = params;
+    const { conversationId } = await params;
 
     const conversation = await prisma.conversation.findFirst({
       where: {

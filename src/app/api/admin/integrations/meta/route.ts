@@ -51,6 +51,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  console.log("[REALTIME DEBUG] META WEBHOOK: POST RECEIVED", {
+    url: request.url,
+    method: request.method,
+  });
   try {
     const auth = await requireAuthenticatedUser(request);
     if (auth instanceof Response) return auth;

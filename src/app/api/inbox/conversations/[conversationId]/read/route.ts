@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedUser } from "@/lib/auth";
+import { buildConversationReadEvent } from "@/lib/inbox/realtime-events";
+import { emitInboxRealtime } from "@/lib/inbox/realtime-emit";
 
-export async function POST(req: NextRequest, { params }: { params: { conversationId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
     const authResult = await requireAuthenticatedUser(req);
     if (authResult instanceof Response) return authResult;
@@ -11,7 +13,7 @@ export async function POST(req: NextRequest, { params }: { params: { conversatio
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { conversationId } = params;
+    const { conversationId } = await params;
 
     const conversation = await prisma.conversation.findFirst({
       where: {
@@ -35,6 +37,17 @@ export async function POST(req: NextRequest, { params }: { params: { conversatio
         },
       },
     });
+
+    // Realtime (Phase 3.8.7.2): best-effort, after the read state persisted.
+    // companyId derives from the authenticated server-side session.
+    emitInboxRealtime(
+      buildConversationReadEvent({
+        companyId: user.companyId,
+        conversationId,
+        userId: user.id,
+        readAt: new Date(),
+      })
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

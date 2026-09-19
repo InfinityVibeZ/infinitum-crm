@@ -38,6 +38,8 @@ import type {
   NormalizedInboxEvent,
   InboxPipelineResult,
 } from "./types";
+import { buildNewMessageEvent, buildConversationUpdatedEvent } from "./realtime-events";
+import { emitInboxRealtime } from "./realtime-emit";
 import { Prisma } from "@prisma/client";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -80,6 +82,16 @@ export class InboxPipelineError extends Error {
 export async function processInboxEvent(
   event: NormalizedInboxEvent
 ): Promise<InboxPipelineResult> {
+  console.log("[REALTIME DEBUG] PIPELINE START", {
+    integrationId: event.integrationId,
+    provider: event.provider,
+    channel: event.channel,
+    externalMessageId: event.externalMessageId,
+    externalConversationId: event.externalConversationId,
+    externalSenderId: event.externalSenderId,
+    direction: event.direction,
+    timestamp: event.timestamp,
+  });
   // ───────────────────────────────────────────────────────────────────────────
   // Step 1: Resolve Integration
   // ───────────────────────────────────────────────────────────────────────────
@@ -132,10 +144,10 @@ export async function processInboxEvent(
 
   let instagramProfile:
     | {
-        id: string;
-        username?: string;
-        name?: string;
-      }
+      id: string;
+      username?: string;
+      name?: string;
+    }
     | null = null;
 
   if (
@@ -215,15 +227,15 @@ export async function processInboxEvent(
       customFields:
         instagramProfile
           ? {
-              instagram: {
-                username:
-                  instagramProfile.username ?? null,
-                name:
-                  instagramProfile.name ?? null,
-                externalId:
-                  instagramProfile.id,
-              },
-            }
+            instagram: {
+              username:
+                instagramProfile.username ?? null,
+              name:
+                instagramProfile.name ?? null,
+              externalId:
+                instagramProfile.id,
+            },
+          }
           : undefined,
     },
   });
@@ -287,8 +299,8 @@ export async function processInboxEvent(
       ) {
         const existingCustomFields =
           existingContact.customFields &&
-          typeof existingContact.customFields === "object" &&
-          !Array.isArray(existingContact.customFields)
+            typeof existingContact.customFields === "object" &&
+            !Array.isArray(existingContact.customFields)
             ? existingContact.customFields
             : {};
 
@@ -333,7 +345,7 @@ export async function processInboxEvent(
   // Steps 4-7: Transactional
   // ───────────────────────────────────────────────────────────────────────────
 
-  return await prisma.$transaction(async (tx) => {
+  const txResult = await prisma.$transaction(async (tx) => {
     // ─────────────────────────────────────────────────────────────────────────
     // Step 4: Resolve / Upsert Conversation
     // ─────────────────────────────────────────────────────────────────────────
@@ -365,17 +377,17 @@ export async function processInboxEvent(
     let existingConversation =
       event.externalConversationId
         ? await tx.conversation.findFirst({
-            where: {
-              integration_id: event.integrationId,
-              external_conversation_id:
-                event.externalConversationId,
-            },
+          where: {
+            integration_id: event.integrationId,
+            external_conversation_id:
+              event.externalConversationId,
+          },
 
-            select: {
-              id: true,
-              contact_id: true,
-            },
-          })
+          select: {
+            id: true,
+            contact_id: true,
+          },
+        })
         : null;
 
     let conversationId: string;
@@ -700,4 +712,127 @@ export async function processInboxEvent(
       conversationStatus,
     };
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Realtime (Phase 3.8.7.2) — best-effort, AFTER the transaction COMMITTED.
+  // Never blocks or fails the pipeline; carries no persistence semantics.
+  // companyId comes from the Integration (server-side), never the webhook.
+  // Only newly-created messages emit events — Meta webhook retries (the
+  // idempotent EXISTING path) publish nothing.
+  // ───────────────────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────────────
+  // Realtime — diagnostic instrumentation
+  // ───────────────────────────────────────────────────────────────────────────
+
+  console.log("[REALTIME DEBUG] PIPELINE TRANSACTION COMPLETE", {
+    integrationId: event.integrationId,
+    provider: event.provider,
+    channel: event.channel,
+    companyId,
+    conversationId: txResult.conversationId,
+    messageId: txResult.messageId,
+    messageStatus: txResult.messageStatus,
+    conversationStatus: txResult.conversationStatus,
+    externalMessageId: event.externalMessageId,
+    externalConversationId: event.externalConversationId,
+    direction: event.direction,
+  });
+
+  if (txResult.messageStatus === "CREATED") {
+    console.log("[REALTIME DEBUG] PIPELINE CREATING new_message EVENT", {
+      companyId,
+      conversationId: txResult.conversationId,
+      messageId: txResult.messageId,
+      direction: event.direction,
+      contentType: event.contentType,
+      createdAt: event.timestamp,
+    });
+
+    const newMessageEvent = buildNewMessageEvent({
+      companyId,
+      conversationId: txResult.conversationId,
+      messageId: txResult.messageId,
+      content: event.text,
+      contentType: event.contentType,
+      direction: event.direction,
+      senderType: "CONTACT",
+      senderContactId: txResult.contactId,
+      createdAt: event.timestamp,
+      lastMessageAt: event.timestamp,
+      conversationStatus: txResult.conversationStatus,
+      messageStatus: txResult.messageStatus,
+    });
+
+    console.log(
+      "[REALTIME DEBUG] PIPELINE CALLING emitInboxRealtime(new_message)",
+      {
+        event: newMessageEvent,
+      }
+    );
+
+    try {
+      emitInboxRealtime(newMessageEvent);
+
+      console.log(
+        "[REALTIME DEBUG] PIPELINE emitInboxRealtime(new_message) CALLED"
+      );
+    } catch (error) {
+      console.error(
+        "[REALTIME DEBUG] PIPELINE emitInboxRealtime(new_message) THREW",
+        error
+      );
+    }
+
+    console.log(
+      "[REALTIME DEBUG] PIPELINE CREATING conversation_updated EVENT",
+      {
+        companyId,
+        conversationId: txResult.conversationId,
+        channel: event.channel,
+        lastMessageAt: event.timestamp,
+      }
+    );
+
+    const conversationUpdatedEvent = buildConversationUpdatedEvent({
+      companyId,
+      conversationId: txResult.conversationId,
+      channel: event.channel,
+      status: "OPEN",
+      lastMessageAt: event.timestamp,
+      lastMessagePreview: event.text
+        ? event.text.slice(0, 160)
+        : null,
+      lastMessageDirection: event.direction,
+    });
+
+    console.log(
+      "[REALTIME DEBUG] PIPELINE CALLING emitInboxRealtime(conversation_updated)",
+      {
+        event: conversationUpdatedEvent,
+      }
+    );
+
+    try {
+      emitInboxRealtime(conversationUpdatedEvent);
+
+      console.log(
+        "[REALTIME DEBUG] PIPELINE emitInboxRealtime(conversation_updated) CALLED"
+      );
+    } catch (error) {
+      console.error(
+        "[REALTIME DEBUG] PIPELINE emitInboxRealtime(conversation_updated) THREW",
+        error
+      );
+    }
+  } else {
+    console.log("[REALTIME DEBUG] PIPELINE SKIPPING REALTIME", {
+      reason: "messageStatus !== CREATED",
+      messageStatus: txResult.messageStatus,
+      messageId: txResult.messageId,
+      conversationId: txResult.conversationId,
+      externalMessageId: event.externalMessageId,
+    });
+  }
+
+  return txResult;
 }

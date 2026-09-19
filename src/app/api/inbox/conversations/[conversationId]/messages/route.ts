@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { decrypt } from "@/lib/encryption";
 import { sendInstagramMessage } from "@/lib/integrations/providers/meta";
+import { buildOutboundMessageEvent } from "@/lib/inbox/realtime-events";
+import { emitInboxRealtime } from "@/lib/inbox/realtime-emit";
 
 /**
  * Phase 3.8.5 — Outbound Instagram text messaging.
@@ -187,6 +189,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
         data: { last_message_at: new Date() },
       });
 
+      // Realtime (Phase 3.8.7.2): best-effort, after persistence succeeded.
+      // Never affects the REST response; companyId comes from the
+      // authenticated server-side session, never from the client body.
+      emitInboxRealtime(
+        buildOutboundMessageEvent({
+          companyId: user.companyId,
+          conversationId,
+          messageId: message.id,
+          content: message.content,
+          status: message.status,
+          senderUserId: user.id,
+          createdAt: message.created_at,
+          lastMessageAt: message.created_at,
+        })
+      );
+
       return NextResponse.json({ message }, { status: 201 });
     }
 
@@ -225,7 +243,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
   }
 }
 
-export async function GET(req: NextRequest, { params }: { params: { conversationId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
     const authResult = await requireAuthenticatedUser(req);
     if (authResult instanceof Response) return authResult;
@@ -234,7 +252,7 @@ export async function GET(req: NextRequest, { params }: { params: { conversation
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { conversationId } = params;
+    const { conversationId } = await params;
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "50");
     const cursor = searchParams.get("cursor");
