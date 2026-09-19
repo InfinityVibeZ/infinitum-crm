@@ -147,6 +147,7 @@ export async function processInboxEvent(
       id: string;
       username?: string;
       name?: string;
+      profilePictureUrl?: string;
     }
     | null = null;
 
@@ -190,6 +191,8 @@ export async function processInboxEvent(
                 instagramProfile.username ?? null,
               hasName:
                 !!instagramProfile.name,
+              hasProfilePicture:
+                !!instagramProfile.profilePictureUrl,
             }
           );
         }
@@ -234,6 +237,8 @@ export async function processInboxEvent(
                 instagramProfile.name ?? null,
               externalId:
                 instagramProfile.id,
+              profilePictureUrl:
+                instagramProfile.profilePictureUrl ?? null,
             },
           }
           : undefined,
@@ -276,7 +281,7 @@ export async function processInboxEvent(
       instagramProfile.name ||
       instagramProfile.username;
 
-    if (instagramDisplayName) {
+    if (instagramDisplayName || instagramProfile.profilePictureUrl) {
       const existingContact =
         await prisma.contact.findUnique({
           where: {
@@ -289,14 +294,7 @@ export async function processInboxEvent(
           },
         });
 
-      if (
-        existingContact &&
-        (
-          !existingContact.name ||
-          existingContact.name === "INSTAGRAM User" ||
-          existingContact.name === "Unknown"
-        )
-      ) {
+      if (existingContact) {
         const existingCustomFields =
           existingContact.customFields &&
             typeof existingContact.customFields === "object" &&
@@ -304,23 +302,33 @@ export async function processInboxEvent(
             ? existingContact.customFields
             : {};
 
-        await prisma.contact.update({
-          where: {
-            id: contactId,
-          },
-          data: {
-            name: instagramDisplayName,
+        const existingInstagram =
+          existingCustomFields.instagram &&
+            typeof existingCustomFields.instagram === "object" &&
+            !Array.isArray(existingCustomFields.instagram)
+            ? existingCustomFields.instagram
+            : {};
 
+        await prisma.contact.update({
+          where: { id: contactId },
+          data: {
+            ...(instagramDisplayName &&
+            (!existingContact.name ||
+              existingContact.name === "INSTAGRAM User" ||
+              existingContact.name === "Unknown")
+              ? { name: instagramDisplayName }
+              : {}),
             customFields: {
               ...existingCustomFields,
-
               instagram: {
-                username:
-                  instagramProfile.username ?? null,
-                name:
-                  instagramProfile.name ?? null,
-                externalId:
-                  instagramProfile.id,
+                ...existingInstagram,
+                username: instagramProfile.username ?? null,
+                name: instagramProfile.name ?? null,
+                externalId: instagramProfile.id,
+                profilePictureUrl:
+                  instagramProfile.profilePictureUrl ??
+                  existingInstagram.profilePictureUrl ??
+                  null,
               },
             },
           },
@@ -335,6 +343,8 @@ export async function processInboxEvent(
               instagramProfile.username ?? null,
             externalId:
               instagramProfile.id,
+            hasProfilePicture:
+              !!instagramProfile.profilePictureUrl,
           }
         );
       }

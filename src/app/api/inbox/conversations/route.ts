@@ -233,8 +233,36 @@ export async function GET(req: NextRequest) {
       conversations.shift();
     }
 
+    const conversationsWithAvatars = conversations.map((conversation) => {
+      const customFields = conversation.contact?.customFields;
+      const customFieldsObject =
+        customFields &&
+        typeof customFields === "object" &&
+        !Array.isArray(customFields)
+          ? (customFields as Record<string, unknown>)
+          : null;
+      const instagramValue = customFieldsObject?.["instagram"];
+      const instagram =
+        instagramValue &&
+        typeof instagramValue === "object" &&
+        !Array.isArray(instagramValue)
+          ? (instagramValue as Record<string, unknown>)
+          : null;
+
+      return {
+        ...conversation,
+        contact: {
+          ...conversation.contact,
+          avatarUrl:
+            typeof instagram?.profilePictureUrl === "string"
+              ? instagram.profilePictureUrl
+              : null,
+        },
+      };
+    });
+
     return NextResponse.json({
-      conversations,
+      conversations: conversationsWithAvatars,
       nextCursor,
     });
   } catch (error) {

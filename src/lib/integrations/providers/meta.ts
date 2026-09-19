@@ -181,6 +181,7 @@ export async function getInstagramUserProfile(
   id: string;
   username?: string;
   name?: string;
+  profilePictureUrl?: string;
 } | null> {
   const accessToken =
     credentials?.accessToken ||
@@ -195,7 +196,7 @@ export async function getInstagramUserProfile(
       `https://graph.instagram.com/v19.0/${encodeURIComponent(
         instagramUserId
       )}` +
-      `?fields=id,username,name` +
+      `?fields=id,username,name,profile_pic` +
       `&access_token=${encodeURIComponent(accessToken)}`;
 
     const response = await fetch(url);
@@ -223,6 +224,14 @@ export async function getInstagramUserProfile(
       name:
         typeof data?.name === "string"
           ? data.name
+          : undefined,
+      profilePictureUrl:
+        typeof data?.profile_pic === "string"
+          ? data.profile_pic
+          : typeof data?.profile_picture_url === "string"
+            ? data.profile_picture_url
+            : typeof data?.profilePictureUrl === "string"
+              ? data.profilePictureUrl
           : undefined,
     };
   } catch (error) {

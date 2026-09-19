@@ -20,6 +20,7 @@ export default function LandingPage() {
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [billingInterval, setBillingInterval] = useState<string>("MONTH");
+  const [currentYear, setCurrentYear] = useState<number | null>(null);
   const [availableIntervals, setAvailableIntervals] = useState<string[]>([
     "MONTH",
   ]);
@@ -178,6 +179,10 @@ export default function LandingPage() {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plans]);
+
+  useEffect(() => {
+    setCurrentYear(new Date().getFullYear());
+  }, []);
 
   /*
    * Auto-scroll every 5 seconds.
@@ -947,7 +952,7 @@ export default function LandingPage() {
           mt-20
         "
       >
-        &copy; {new Date().getFullYear()} Infinity Vibez.
+        &copy; {currentYear ?? ""} Infinity Vibez.
         All rights reserved.
       </footer>
     </div>

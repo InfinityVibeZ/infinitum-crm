@@ -36,6 +36,7 @@ interface Contact {
   name: string;
   email: string | null;
   phone: string | null;
+  avatarUrl?: string | null;
   customFields?: {
     instagram?: InstagramProfile;
     [key: string]: any;
@@ -227,6 +228,30 @@ export default function InboxPage() {
     // Start once per mount; handlers close over stable setters only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!selectedConversation) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "INPUT" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      setSelectedConversation(null);
+      setMessages([]);
+      setReplyText("");
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [selectedConversation]);
 
   // Phase 3.8.6 — search debounce: raw input -> debounced query after 300ms.
   useEffect(() => {
@@ -605,12 +630,45 @@ export default function InboxPage() {
     );
   };
 
-  // UI-only: deterministic initials avatar.
+  const getProfileImageUrl = (conversation: Conversation) => {
+    if (conversation.contact?.avatarUrl) {
+      return conversation.contact.avatarUrl;
+    }
+
+    const customFields = conversation.contact?.customFields as Record<string, any> | null | undefined;
+    const channelFields = customFields?.[conversation.channel.toLowerCase()] as Record<string, any> | undefined;
+    const candidates = [
+      customFields?.avatarUrl,
+      customFields?.avatar_url,
+      customFields?.profilePictureUrl,
+      customFields?.profile_picture_url,
+      customFields?.profilePic,
+      customFields?.profile_pic,
+      customFields?.picture,
+      customFields?.imageUrl,
+      customFields?.image_url,
+      channelFields?.avatarUrl,
+      channelFields?.avatar_url,
+      channelFields?.profilePictureUrl,
+      channelFields?.profile_picture_url,
+      channelFields?.profilePic,
+      channelFields?.profile_pic,
+      channelFields?.picture,
+      channelFields?.imageUrl,
+      channelFields?.image_url,
+    ];
+
+    return candidates.find((value): value is string => typeof value === "string" && value.length > 0) || null;
+  };
+
+  // UI-only: profile image with deterministic initials fallback.
   const Avatar = ({
     name,
+    imageUrl,
     size = "md",
   }: {
     name: string;
+    imageUrl?: string | null;
     size?: "sm" | "md";
   }) => {
     const initials = (name || "?")
@@ -623,7 +681,16 @@ export default function InboxPage() {
     const dims =
       size === "sm" ? "w-8 h-8 text-[11px]" : "w-10 h-10 text-sm";
 
-    return (
+    const [imageFailed, setImageFailed] = useState(false);
+
+    return imageUrl && !imageFailed ? (
+      <img
+        src={imageUrl}
+        alt=""
+        onError={() => setImageFailed(true)}
+        className={`${dims} shrink-0 rounded-full object-cover border border-nexus-border select-none`}
+      />
+    ) : (
       <div
         aria-hidden="true"
         className={`${dims} shrink-0 rounded-full bg-nexus-hover border border-nexus-border flex items-center justify-center font-semibold text-nexus-text-secondary select-none`}
@@ -820,6 +887,7 @@ export default function InboxPage() {
                 const unread = isUnread(conv);
                 const isSelected = selectedConversation?.id === conv.id;
                 const instagramUsername = getInstagramUsername(conv);
+                const profileImageUrl = getProfileImageUrl(conv);
                 const lastMsg = conv.messages?.[0];
                 const isOutboundPreview =
                   lastMsg?.direction === "OUTBOUND";
@@ -844,7 +912,7 @@ export default function InboxPage() {
                           : "border-l-2 border-transparent hover:bg-nexus-hover/60"
                       }`}
                     >
-                      <Avatar name={displayName} />
+                      <Avatar name={displayName} imageUrl={profileImageUrl} />
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline justify-between gap-2">
@@ -978,6 +1046,7 @@ export default function InboxPage() {
 
                 <Avatar
                   name={selectedConversation.contact.name || "Unknown Contact"}
+                  imageUrl={getProfileImageUrl(selectedConversation)}
                 />
 
                 <div className="min-w-0">
