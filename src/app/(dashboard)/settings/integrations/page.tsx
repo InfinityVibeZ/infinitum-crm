@@ -14,6 +14,7 @@ import {
   IconChevronUp,
 } from "@tabler/icons-react";
 import toast from "react-hot-toast";
+import { SkeletonHeader } from "@/components/ui/Skeleton";
 
 const AVAILABLE_PROVIDERS = [
   {
@@ -261,7 +262,7 @@ export default function SettingsIntegrationsPage() {
     )
   );
   return (
-    <div className="space-y-12 text-nexus-text max-w-6xl mx-auto pb-16">
+    <div className="w-full max-w-7xl mx-auto space-y-12 text-nexus-text pb-16">
 
       {/* Immersive Header */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-nexus-border/50 pb-6">
@@ -278,9 +279,45 @@ export default function SettingsIntegrationsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center p-32 space-y-4">
-          <IconLoader2 className="animate-spin text-nexus-primary" size={48} />
-          <p className="text-nexus-muted animate-pulse font-medium">Loading integrations ecosystem...</p>
+        <div className="space-y-12 text-nexus-text animate-pulse">
+          <SkeletonHeader />
+          <section className="space-y-6">
+            <div className="h-8 w-56 bg-nexus-border/40 rounded-lg" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={`active-skeleton-${index}`}
+                  className="h-72 bg-nexus-card border border-nexus-border/50 rounded-2xl p-6 space-y-5"
+                >
+                  <div className="flex justify-between">
+                    <div className="h-14 w-14 rounded-xl bg-nexus-border/40" />
+                    <div className="h-6 w-20 rounded-full bg-nexus-border/30" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-6 w-32 bg-nexus-border/40 rounded" />
+                    <div className="h-4 w-44 bg-nexus-border/30 rounded" />
+                  </div>
+                  <div className="h-20 bg-nexus-border/20 rounded-xl" />
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="space-y-6">
+            <div className="h-8 w-64 bg-nexus-border/40 rounded-lg" />
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div
+                  key={`available-skeleton-${index}`}
+                  className="h-56 bg-nexus-card border border-nexus-border/50 rounded-2xl p-6 space-y-4"
+                >
+                  <div className="h-14 w-14 rounded-2xl bg-nexus-border/40" />
+                  <div className="h-6 w-40 bg-nexus-border/40 rounded" />
+                  <div className="h-4 w-full bg-nexus-border/30 rounded" />
+                  <div className="h-10 w-full bg-nexus-border/20 rounded-xl" />
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       ) : (
         <div className="space-y-16">
@@ -293,7 +330,7 @@ export default function SettingsIntegrationsPage() {
                 <h2 className="text-2xl font-bold text-white tracking-wide">Active Connections</h2>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-stretch">
                 {connectedProviders.map(provider => {
                   const activeIntegration = integrations.find(
                     i =>
@@ -443,16 +480,16 @@ export default function SettingsIntegrationsPage() {
                 <p className="text-nexus-muted">You have successfully connected all available integrations.</p>
               </div>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
                 {availableProviders.map((provider) => {
                   const IconComponent = provider.icon || IconPlugConnected;
 
                   return (
                     <div
                       key={`available-${provider.id}`}
-                      className="group flex flex-col md:flex-row items-start md:items-center justify-between p-6 bg-nexus-card border border-nexus-border hover:border-nexus-border/80 rounded-2xl transition-all duration-300 hover:bg-white/[0.02]"
+                      className="group flex h-full flex-col items-start justify-between p-6 bg-nexus-card border border-nexus-border hover:border-nexus-border/80 rounded-2xl transition-all duration-300 hover:bg-white/[0.02]"
                     >
-                      <div className="flex items-start gap-6 flex-1">
+                      <div className="flex items-start gap-6 flex-1 w-full">
                         <div className={`p-4 rounded-2xl ${provider.bg} ${provider.color} ring-1 ring-white/5 shadow-inner mt-1 md:mt-0`}>
                           <IconComponent size={36} stroke={1.5} />
                         </div>
@@ -476,7 +513,7 @@ export default function SettingsIntegrationsPage() {
                         </div>
                       </div>
 
-                      <div className="mt-6 md:mt-0 md:ml-6 shrink-0 w-full md:w-auto">
+                      <div className="mt-6 shrink-0 w-full">
                         <button
                           onClick={() => handleConnect(provider.id, provider.providerId, provider.name, provider.type)}
                           disabled={actionLoading === `connect-${provider.id}`}

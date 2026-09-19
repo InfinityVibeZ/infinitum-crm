@@ -19,6 +19,7 @@ import {
   IconBrandFacebook,
   IconMessage,
   IconSearch,
+  IconX,
   IconArrowBack,
   IconInbox,
   IconAlertCircle,
@@ -49,6 +50,8 @@ interface Message {
   direction: string;
   created_at: string;
   status?: string; // UI-only: "SENT" | "FAILED" | … (rendering distinction)
+  sender_user_id?: string | null;
+  sender_user?: { id: string; name: string | null; email: string } | null;
 }
 
 interface Conversation {
@@ -71,6 +74,12 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [replyText, setReplyText] = useState("");
+  const [messageSearchInput, setMessageSearchInput] = useState("");
+  const [messageSearch, setMessageSearch] = useState("");
+  const [messageSearchOpen, setMessageSearchOpen] = useState(false);
+  const [messageSearchResults, setMessageSearchResults] = useState<Message[]>([]);
+  const [messageSearchLoading, setMessageSearchLoading] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
   // Prevent an older conversation request from overwriting
   // the messages of the currently selected conversation.
@@ -84,6 +93,7 @@ export default function InboxPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const listRequestRef = useRef(0);
+  const listSearchAbortRef = useRef<AbortController | null>(null);
   const conversationsRef = useRef<Conversation[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
@@ -280,15 +290,9 @@ export default function InboxPage() {
   useEffect(() => {
     const t = setTimeout(() => {
       setSearch(searchInput.trim());
-    }, 300);
+    }, 250);
     return () => clearTimeout(t);
   }, [searchInput]);
-
-  // Initial load.
-  useEffect(() => {
-    fetchConversations(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Phase 3.8.6 — refetch (reset) whenever filters or the debounced
   // search change.
@@ -307,6 +311,11 @@ export default function InboxPage() {
     // Immediately clear the previous conversation's messages.
     setMessages([]);
     setSendError(null);
+    setMessageSearchInput("");
+    setMessageSearch("");
+    setMessageSearchOpen(false);
+    setMessageSearchResults([]);
+    setHighlightedMessageId(null);
 
     fetchMessages(selectedConversation.id);
 
@@ -319,6 +328,36 @@ export default function InboxPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversation]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setMessageSearch(messageSearchInput.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [messageSearchInput]);
+
+  useEffect(() => {
+    if (!selectedConversation || !messageSearch) {
+      setMessageSearchResults([]);
+      setMessageSearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setMessageSearchLoading(true);
+    fetch(
+      `/api/inbox/conversations/${selectedConversation.id}/messages?search=${encodeURIComponent(messageSearch)}&limit=50`,
+      { cache: "no-store", signal: controller.signal }
+    )
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => setMessageSearchResults(data?.messages || []))
+      .catch((error) => {
+        if (error?.name !== "AbortError") setMessageSearchResults([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setMessageSearchLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [messageSearch, selectedConversation?.id]);
+
   /*
    * Phase 3.8.6 — Conversation list fetching.
    *
@@ -330,6 +369,9 @@ export default function InboxPage() {
    */
   const fetchConversations = async (reset: boolean = true) => {
     const requestId = ++listRequestRef.current;
+    listSearchAbortRef.current?.abort();
+    const controller = new AbortController();
+    listSearchAbortRef.current = controller;
 
     if (reset) {
       setLoading(true);
@@ -351,7 +393,9 @@ export default function InboxPage() {
       }
 
       const qs = params.toString();
-      const res = await fetch(`/api/inbox/conversations${qs ? `?${qs}` : ""}`);
+      const res = await fetch(`/api/inbox/conversations${qs ? `?${qs}` : ""}`, {
+        signal: controller.signal,
+      });
 
       if (!res.ok) {
         throw new Error(`Failed to fetch conversations: ${res.status}`);
@@ -387,6 +431,7 @@ export default function InboxPage() {
               ...page,
             ];
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       if (requestId === listRequestRef.current) {
         console.error("Failed to fetch conversations", error);
       }
@@ -612,7 +657,7 @@ export default function InboxPage() {
     if (hours < 24) return `${hours}h`;
     const days = Math.floor(hours / 24);
     if (days < 7) return `${days}d`;
-    return new Date(iso).toLocaleDateString();
+    return new Date(iso).toLocaleDateString("en-US", { timeZone: "UTC" });
   };
 
   // UI-only: full date separator label between messages.
@@ -622,12 +667,17 @@ export default function InboxPage() {
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
 
-    if (d.toDateString() === today.toDateString()) return "Today";
-    if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-    return d.toLocaleDateString(undefined, {
+    const utcDate = d.toLocaleDateString("en-US", { timeZone: "UTC" });
+    const utcToday = today.toLocaleDateString("en-US", { timeZone: "UTC" });
+    const utcYesterday = yesterday.toLocaleDateString("en-US", { timeZone: "UTC" });
+
+    if (utcDate === utcToday) return "Today";
+    if (utcDate === utcYesterday) return "Yesterday";
+    return d.toLocaleDateString("en-US", {
+      timeZone: "UTC",
       month: "short",
       day: "numeric",
-      year: d.getFullYear() === today.getFullYear() ? undefined : "numeric",
+      year: d.getUTCFullYear() === today.getUTCFullYear() ? undefined : "numeric",
     });
   };
 
@@ -722,6 +772,8 @@ export default function InboxPage() {
       </div>
     );
   };
+
+  const messagesToRender = messageSearch ? messageSearchResults : messages;
 
   // UI-only: subtle custom scrollbar classes.
   const scrollAreaClass = "inbox-scroll";
@@ -1090,6 +1142,29 @@ export default function InboxPage() {
                   </div>
                 </div>
               </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (messageSearchOpen) {
+                      setMessageSearchInput("");
+                      setMessageSearch("");
+                      setMessageSearchResults([]);
+                      setHighlightedMessageId(null);
+                    }
+                    setMessageSearchOpen((open) => !open);
+                  }}
+                  aria-label={messageSearchOpen ? "Close message search" : "Search messages"}
+                  aria-expanded={messageSearchOpen}
+                  className={`p-2 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
+                    messageSearchOpen
+                      ? "text-blue-400 bg-blue-500/10"
+                      : "text-nexus-muted hover:text-nexus-text hover:bg-nexus-hover"
+                  }`}
+                >
+                  <IconSearch size={17} />
+                </button>
+              </div>
             </header>
 
             {/* Message thread — the ONLY vertical scroll area in the panel */}
@@ -1097,6 +1172,59 @@ export default function InboxPage() {
               ref={threadRef}
               className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-1 ${scrollAreaClass}`}
             >
+              {messageSearchOpen && (
+                <div className="sticky top-0 z-10 mb-3 flex items-center gap-2 bg-nexus-bg/95 pb-2">
+                  <IconSearch size={15} className="text-nexus-muted" />
+                  <input
+                    autoFocus
+                    type="search"
+                    value={messageSearchInput}
+                    onChange={(event) => setMessageSearchInput(event.target.value)}
+                    placeholder="Search messages…"
+                    aria-label="Search messages in this conversation"
+                    className="min-w-0 flex-1 bg-nexus-card border border-nexus-border rounded-lg px-3 py-2 text-sm text-nexus-text placeholder:text-nexus-muted/70 outline-none focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMessageSearchInput("");
+                      setMessageSearch("");
+                      setMessageSearchOpen(false);
+                      setMessageSearchResults([]);
+                      setHighlightedMessageId(null);
+                    }}
+                    aria-label="Clear and close message search"
+                    className="p-2 rounded-lg text-nexus-muted hover:text-nexus-text hover:bg-nexus-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                  >
+                    <IconX size={16} />
+                  </button>
+                  {messageSearchLoading && (
+                    <span className="text-xs text-nexus-muted">Searching…</span>
+                  )}
+                </div>
+              )}
+              {messageSearchOpen && messageSearch && messageSearchResults.length > 0 && (
+                <div className="mb-3 rounded-lg border border-nexus-border bg-nexus-card p-2">
+                  <p className="px-2 pb-1 text-xs text-nexus-muted">
+                    {messageSearchResults.length} result{messageSearchResults.length === 1 ? "" : "s"}
+                  </p>
+                  {messageSearchResults.map((result) => (
+                    <button
+                      key={result.id}
+                      type="button"
+                      className="block w-full truncate rounded px-2 py-1.5 text-left text-xs text-nexus-text-secondary hover:bg-nexus-hover"
+                      onClick={() => {
+                        setHighlightedMessageId(result.id);
+                        document
+                          .getElementById(`message-${result.id}`)
+                          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }}
+                    >
+                      {result.content}
+                    </button>
+                  ))}
+                </div>
+              )}
               {messagesLoading ? (
                 <div className="space-y-3" aria-hidden="true">
                   {[70, 45, 60].map((w, i) => (
@@ -1113,30 +1241,42 @@ export default function InboxPage() {
                     </div>
                   ))}
                 </div>
-              ) : messages.length === 0 ? (
+              ) : messagesToRender.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center gap-2">
                   <div className="w-10 h-10 rounded-full bg-nexus-hover flex items-center justify-center">
                     <IconMessage size={18} className="text-nexus-muted" />
                   </div>
-                  <p className="text-sm text-nexus-text-secondary">No messages yet</p>
+                  <p className="text-sm text-nexus-text-secondary">
+                    {messageSearch ? "No matching messages" : "No messages yet"}
+                  </p>
                   <p className="text-xs text-nexus-muted">
-                    Messages in this conversation will appear here.
+                    {messageSearch
+                      ? "Try a different search term."
+                      : "Messages in this conversation will appear here."}
                   </p>
                 </div>
               ) : (
-                messages.map((msg, idx) => {
+                messagesToRender.map((msg, idx) => {
                   const isOutbound = msg.direction === "OUTBOUND";
                   const isFailed = msg.status === "FAILED";
 
                   // Date separator when the day changes.
-                  const prev = idx > 0 ? messages[idx - 1] : null;
+                  const prev = idx > 0 ? messagesToRender[idx - 1] : null;
                   const showDateSep =
                     !prev ||
-                    new Date(prev.created_at).toDateString() !==
-                      new Date(msg.created_at).toDateString();
+                    new Date(prev.created_at).toLocaleDateString("en-US", { timeZone: "UTC" }) !==
+                      new Date(msg.created_at).toLocaleDateString("en-US", { timeZone: "UTC" });
 
                   return (
-                    <div key={msg.id}>
+                    <div
+                      key={msg.id}
+                      id={`message-${msg.id}`}
+                      className={
+                        highlightedMessageId === msg.id
+                          ? "rounded-2xl ring-2 ring-blue-400/70"
+                          : undefined
+                      }
+                    >
                       {showDateSep && (
                         <div
                           className="flex items-center gap-3 py-3"
@@ -1187,7 +1327,8 @@ export default function InboxPage() {
                               </>
                             )}
                             <time dateTime={msg.created_at}>
-                              {new Date(msg.created_at).toLocaleTimeString([], {
+                              {new Date(msg.created_at).toLocaleTimeString("en-US", {
+                                timeZone: "UTC",
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })}
