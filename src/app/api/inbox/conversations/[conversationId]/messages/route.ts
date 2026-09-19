@@ -256,6 +256,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ conv
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "50");
     const cursor = searchParams.get("cursor");
+    const search = searchParams.get("search")?.trim().slice(0, 100) || "";
 
     // Validate access
     const conversation = await prisma.conversation.findFirst({
@@ -270,9 +271,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ conv
     }
 
     const messages = await prisma.message.findMany({
-      where: { conversation_id: conversationId },
+      where: {
+        conversation_id: conversationId,
+        ...(search
+          ? { content: { contains: search, mode: "insensitive" } }
+          : {}),
+      },
       orderBy: { created_at: "desc" },
       take: limit + 1,
+      include: {
+        sender_user: {
+          select: { id: true, name: true, email: true },
+        },
+      },
       ...(cursor && {
         cursor: { id: cursor },
       }),

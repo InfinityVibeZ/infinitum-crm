@@ -72,44 +72,6 @@ export async function GET(req: NextRequest) {
         ? channelParam
         : null;
 
-    /*
-     * Only integrations that are currently connected and active
-     * are allowed to appear in the Inbox.
-     *
-     * This is intentionally server-side so that disconnected
-     * channels cannot appear through the "All" view either.
-     */
-    const connectedIntegrations =
-      await prisma.integration.findMany({
-        where: {
-          companyId: user.companyId,
-          status: "CONNECTED",
-          isActive: true,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-    const connectedIntegrationIds =
-      connectedIntegrations.map(
-        (integration) => integration.id
-      );
-
-    /*
-     * No connected integrations means the Inbox should be empty.
-     *
-     * We intentionally do not return conversations where
-     * integration_id IS NULL because those conversations cannot
-     * be associated with an active channel.
-     */
-    if (connectedIntegrationIds.length === 0) {
-      return NextResponse.json({
-        conversations: [],
-        nextCursor: null,
-      });
-    }
-
     const conversations =
       await prisma.conversation.findMany({
         where: {
@@ -119,8 +81,10 @@ export async function GET(req: NextRequest) {
            * Only conversations belonging to currently connected
            * integrations are visible in Inbox.
            */
-          integration_id: {
-            in: connectedIntegrationIds,
+          integration: {
+            companyId: user.companyId,
+            status: "CONNECTED",
+            isActive: true,
           },
 
           /*

@@ -15,7 +15,10 @@ export default function AdminUsagePage() {
         const res = await fetch("/api/admin/usage", {
           headers: { Authorization: `Bearer ${localStorage.getItem("nexus-token")}` },
         });
-        if (res.ok) setUsage(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setUsage(Array.isArray(data?.usage) ? data.usage : []);
+        }
       } finally {
         setLoading(false);
       }
@@ -63,12 +66,12 @@ export default function AdminUsagePage() {
               ) : (
                 usage.map((u) => (
                   <tr key={u.id} className="hover:bg-nexus-hover/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-semibold">{u.company?.name || "Unknown"}</td>
+                    <td className="px-6 py-4 text-sm font-semibold">{u.company?.name || u.companyId || "Unknown"}</td>
                     <td className="px-6 py-4 text-xs text-nexus-primary">{u.featureCode}</td>
-                    <td className="px-6 py-4 font-bold text-nexus-text">{u.totalUsage.toString()}</td>
+                    <td className="px-6 py-4 font-bold text-nexus-text">{u.usageValue?.toString() || "0"}</td>
                     <td className="px-6 py-4 text-xs text-nexus-muted">{u.limitValue?.toString() || "Unlimited"}</td>
                     <td className="px-6 py-4 text-[10px] text-nexus-muted">
-                      {new Date(u.currentPeriodStart).toLocaleDateString()} - {new Date(u.currentPeriodEnd).toLocaleDateString()}
+                      {new Date(u.periodStart).toLocaleDateString()} - {new Date(u.periodEnd).toLocaleDateString()}
                     </td>
                   </tr>
                 ))

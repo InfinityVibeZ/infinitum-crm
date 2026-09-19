@@ -84,20 +84,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     console.log("[AUTH-STORE] fetchCurrentUser START");
 
     try {
-      const response = await fetch(
-        "/api/auth/me",
-        {
-          method: "GET",
+      let response: Response;
+      for (let attempt = 0; ; attempt += 1) {
+        response = await fetch(
+          "/api/auth/me",
+          {
+            method: "GET",
 
-          // Explicitly allow same-origin cookies.
-          credentials: "same-origin",
+            // Explicitly allow same-origin cookies.
+            credentials: "same-origin",
 
-          headers: {
-            "Content-Type": "application/json",
-          },
-          cache: "no-store",
-        }
-      );
+            headers: {
+              "Content-Type": "application/json",
+            },
+            cache: "no-store",
+          }
+        );
+
+        // Turbopack can briefly return 404 while compiling a route on the
+        // first request in a fresh local dev process.
+        if (response.status !== 404 || attempt >= 2) break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
 
       console.log(
         "[AUTH-STORE] /api/auth/me RESPONSE",

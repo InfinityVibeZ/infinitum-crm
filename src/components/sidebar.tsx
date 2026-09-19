@@ -722,27 +722,28 @@ export function Sidebar({
         }
         aria-expanded={!isCollapsed}
         className="
-    hidden
-    md:flex
-    absolute
-    right-[-9px]
-    top-[72px]
-    z-[100]
-    w-[18px]
-    h-[18px]
-    items-center
-    justify-center
-    rounded-full
-    border
-    border-nexus-border
-    bg-nexus-card
-    text-nexus-muted
-    shadow-sm
-    hover:bg-nexus-hover
-    hover:text-nexus-text
-    transition-colors
-    focus:outline-none
-  "
+  hidden
+  md:flex
+  absolute
+  right-[-9px]
+  top-[72px]
+  z-[100]
+  w-[18px]
+  h-[18px]
+  items-center
+  justify-center
+  rounded-full
+  border
+  border-white/30
+  bg-nexus-card
+  text-white/70
+  shadow-sm
+  hover:bg-nexus-hover
+  hover:border-white/50
+  hover:text-white
+  transition-colors
+  focus:outline-none
+"
       >
         {isCollapsed ? (
           <IconChevronRight
