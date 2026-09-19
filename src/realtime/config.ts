@@ -26,7 +26,7 @@ function parseOrigins(raw: string | undefined): string[] {
 
 export function loadRealtimeConfig(): RealtimeConfig {
   const enabled = process.env.REALTIME_ENABLED === "true";
-  const port = Number(process.env.REALTIME_PORT || "5001");
+  const port = Number(process.env.REALTIME_PORT || "3000");
   const path = process.env.REALTIME_HUB_PATH || "/hubs/inbox";
   const allowedOrigins = parseOrigins(process.env.REALTIME_ALLOWED_ORIGINS);
   const jwtSecret = process.env.JWT_SECRET as string;
