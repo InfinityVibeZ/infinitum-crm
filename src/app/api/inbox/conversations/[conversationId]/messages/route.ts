@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticatedUser } from "@/lib/auth";
 import { decrypt } from "@/lib/encryption";
-import { sendInstagramMessage } from "@/lib/integrations/providers/meta";
+import {
+  sendInstagramMessage,
+  sendFacebookMessage,
+} from "@/lib/integrations/providers/meta";
 import { buildOutboundMessageEvent } from "@/lib/inbox/realtime-events";
 import { emitInboxRealtime } from "@/lib/inbox/realtime-emit";
 
@@ -66,25 +69,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
 
-    if (conversation.channel.toUpperCase() !== "INSTAGRAM") {
+    const channel = conversation.channel.toUpperCase();
+    const isInstagram = channel === "INSTAGRAM";
+    const isFacebook = channel === "FACEBOOK";
+
+    if (!isInstagram && !isFacebook) {
       return NextResponse.json(
-        { error: "Outbound messaging is only supported for Instagram conversations" },
+        { error: "Outbound messaging is only supported for Instagram and Facebook conversations" },
         { status: 400 }
       );
     }
 
     if (!conversation.integration_id || !conversation.integration?.isActive) {
       return NextResponse.json(
-        { error: "Conversation is not connected to an active Instagram integration" },
+        { error: `Conversation is not connected to an active ${channel} integration` },
         { status: 400 }
       );
     }
 
-    // ── Resolve the customer's Instagram recipient ID ──────────────────────
-    // Preferred: the CUSTOMER participant's external_identity_id.
-    // Fallback: parse from external_conversation_id
-    //   (format: `${businessIgId}_${customerIgId}` per the normalizer).
-    let recipientIgId: string | null = null;
+    // ── Resolve the customer's recipient ID ────────────────────────────────
+    // Instagram: format `${businessIgId}_${customerIgId}`
+    // Facebook: format `${pageId}_${customerMessengerId}`
+    let recipientId: string | null = null;
+    let pageId: string | null = null;
 
     const customerParticipant = await prisma.conversationParticipant.findFirst({
       where: {
@@ -96,17 +103,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     });
 
     if (customerParticipant?.external_identity_id) {
-      recipientIgId = customerParticipant.external_identity_id;
+      recipientId = customerParticipant.external_identity_id;
     } else if (conversation.external_conversation_id) {
       const parts = conversation.external_conversation_id.split("_");
-      if (parts.length === 2 && parts[1]) {
-        recipientIgId = parts[1];
+      if (parts.length >= 2 && parts[1]) {
+        pageId = parts[0] ?? null;
+        recipientId = parts[1] ?? null;
       }
     }
 
-    if (!recipientIgId) {
+    if (isFacebook) {
+      if (!pageId && conversation.external_conversation_id) {
+        const parts = conversation.external_conversation_id.split("_");
+        if (parts.length >= 2) {
+          pageId = parts[0] ?? null;
+          recipientId = parts[1] ?? null;
+        }
+      }
+
+      if (!pageId) {
+        return NextResponse.json(
+          { error: "Unable to resolve the Facebook Page ID for this conversation" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (!recipientId) {
       return NextResponse.json(
-        { error: "Unable to resolve recipient Instagram ID for this conversation" },
+        { error: `Unable to resolve recipient ${isInstagram ? "Instagram" : "Messenger"} ID for this conversation` },
         { status: 400 }
       );
     }
@@ -142,7 +167,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
 
     if (!credentialsRecord?.encryptedData) {
       return NextResponse.json(
-        { error: "Instagram integration credentials are missing" },
+        { error: `${channel} integration credentials are missing` },
         { status: 400 }
       );
     }
@@ -156,16 +181,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
           : decryptedData;
     } catch {
       return NextResponse.json(
-        { error: "Instagram integration credentials are invalid" },
+        { error: `${channel} integration credentials are invalid` },
         { status: 400 }
       );
     }
 
-    // ── Send via Instagram Messaging API ──────────────────────────────────
-    const sendResult = await sendInstagramMessage(credentials, recipientIgId, text);
+    const sendResult = isInstagram
+      ? await sendInstagramMessage(credentials, recipientId, text)
+      : await sendFacebookMessage(credentials, pageId!, recipientId, text);
 
     if (sendResult.ok) {
-      // ── Success: persist the sent message ──────────────────────────────
       const message = await prisma.message.create({
         data: {
           company_id: user.companyId,
@@ -178,8 +203,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
           content_type: "TEXT",
           status: "SENT",
           metadata: {
-            provider: "INSTAGRAM",
-            recipientIgId,
+            provider: channel,
+            recipientId,
+            ...(isFacebook ? { pageId } : {}),
           },
         },
       });
@@ -189,9 +215,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
         data: { last_message_at: new Date() },
       });
 
-      // Realtime (Phase 3.8.7.2): best-effort, after persistence succeeded.
-      // Never affects the REST response; companyId comes from the
-      // authenticated server-side session, never from the client body.
       emitInboxRealtime(
         buildOutboundMessageEvent({
           companyId: user.companyId,
@@ -208,8 +231,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       return NextResponse.json({ message }, { status: 201 });
     }
 
-    // ── Failure: persist a FAILED record (externalMessageId = null unless
-    // Meta actually returned one, which only happens on success) ──────────
     const failedMessage = await prisma.message.create({
       data: {
         company_id: user.companyId,
@@ -224,15 +245,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
         error_code: sendResult.errorCode ?? null,
         error_message: sendResult.errorMessage ?? null,
         metadata: {
-          provider: "INSTAGRAM",
-          recipientIgId,
+          provider: channel,
+          recipientId,
+          ...(isFacebook ? { pageId } : {}),
         },
       },
     });
 
     return NextResponse.json(
       {
-        error: "Failed to send message",
+        error: sendResult.errorMessage || "Failed to send message",
+        code: sendResult.errorCode ?? null,
         message: failedMessage,
       },
       { status: 502 }

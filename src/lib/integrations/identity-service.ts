@@ -44,6 +44,15 @@ export interface ResolveIdentityResult {
   conflicts?: any[];
 }
 
+function isPlaceholderContactName(name?: string | null): boolean {
+  if (!name) return true;
+  return [
+    "Unknown",
+    "FACEBOOK User",
+    "INSTAGRAM User",
+  ].includes(name.trim());
+}
+
 export async function resolveContactIdentity(
   tx: any,
   params: ResolveIdentityParams
@@ -123,7 +132,9 @@ export async function resolveContactIdentity(
     finalContactId = Array.from(matchCandidates)[0];
     status = "MATCHED";
 
-    // Enrich existing contact if new non-empty data is provided
+    // Enrich existing contact if new non-empty data is provided.
+    // Placeholder values such as "FACEBOOK User" are not real CRM data and
+    // must be overwritten with the real provider profile from the webhook.
     const updateData: any = {};
     const existingContact = await tx.contact.findUnique({ where: { id: finalContactId } });
     if (existingContact) {
@@ -136,9 +147,32 @@ export async function resolveContactIdentity(
         updateData.normalizedPhone = nPhone;
       }
       if (contactData) {
-        if (contactData.name && !existingContact.name) updateData.name = contactData.name;
+        if (contactData.name && (isPlaceholderContactName(existingContact.name) || !existingContact.name)) {
+          updateData.name = contactData.name;
+        }
         if (contactData.companyName && !existingContact.companyName) updateData.companyName = contactData.companyName;
-        // ... extend as needed based on precedence rules
+
+        if (
+          contactData.customFields &&
+          typeof contactData.customFields === "object" &&
+          !Array.isArray(contactData.customFields)
+        ) {
+          const existingCustomFields =
+            existingContact.customFields &&
+            typeof existingContact.customFields === "object" &&
+            !Array.isArray(existingContact.customFields)
+              ? (existingContact.customFields as Record<string, unknown>)
+              : {};
+
+          const mergedCustomFields = {
+            ...existingCustomFields,
+            ...contactData.customFields,
+          };
+
+          if (JSON.stringify(existingCustomFields) !== JSON.stringify(mergedCustomFields)) {
+            updateData.customFields = mergedCustomFields;
+          }
+        }
       }
 
       if (Object.keys(updateData).length > 0) {
