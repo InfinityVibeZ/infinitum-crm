@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/integrations/provider-registry";
 import { prisma } from "@/lib/prisma";
 import { logAuditEvent } from "@/lib/audit";
+import {
+  discoverMetaAssets,
+  saveMetaAssets,
+} from "@/lib/integrations/meta-assets";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
@@ -99,7 +103,8 @@ export async function GET(request: Request) {
    */
   const popupResponse = (
     type: string,
-    errMessage?: string
+    errMessage?: string,
+    successMessage?: string
   ) => {
     const html = `
       <!DOCTYPE html>
@@ -129,6 +134,11 @@ export async function GET(request: Request) {
                     errMessage
                       ? JSON.stringify(errMessage)
                       : "undefined"
+                  },
+                  message: ${
+                    successMessage
+                      ? JSON.stringify(successMessage)
+                      : "undefined"
                   }
                 },
                 window.location.origin
@@ -148,7 +158,11 @@ export async function GET(request: Request) {
                 ${JSON.stringify(redirectTarget)} +
                 ${
                   type === "META_OAUTH_SUCCESS"
-                    ? JSON.stringify("?success=true")
+                    ? JSON.stringify(
+                        `?success=true&message=${encodeURIComponent(
+                          successMessage || "Integration connected successfully"
+                        )}`
+                      )
                     : JSON.stringify(
                         `?error=${
                           errMessage
@@ -207,6 +221,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    let integrationId: string;
     /*
      * 1. Verify OAuth State Token
      *
@@ -428,6 +443,7 @@ export async function GET(request: Request) {
             status: "CONNECTED",
             displayName,
             isActive: true,
+              lastSyncAt: new Date(),
           },
         });
 
@@ -467,6 +483,8 @@ export async function GET(request: Request) {
         }
       );
 
+      integrationId = existing.id;
+
     } else {
       const createdIntegration =
         await prisma.integration.create({
@@ -477,6 +495,8 @@ export async function GET(request: Request) {
             externalId,
             displayName,
             status: "CONNECTED",
+              lastSyncAt: new Date(),
+
             credentials: {
               create: {
                 encryptedData,
@@ -496,11 +516,57 @@ export async function GET(request: Request) {
           companyId,
         }
       );
+
+      integrationId = createdIntegration.id;
     }
 
     console.log(
       "[META-OAUTH-TRACE] integration_saved"
     );
+
+    let successMessage = `${intent === "instagram" ? "Instagram" : "Facebook"} connected successfully!`;
+
+    if (intent === "facebook") {
+      const facebookAccessToken =
+        credentials.accessToken || credentials.access_token;
+
+      if (!facebookAccessToken) {
+        throw new Error("No Meta access token available");
+      }
+
+      const pageAssets = (await discoverMetaAssets(
+        facebookAccessToken,
+        false
+      )).filter((asset) => asset.type === "PAGE");
+
+      await saveMetaAssets({
+        integrationId,
+        companyId,
+        provider: dbProvider,
+        assets: pageAssets,
+        accessToken: facebookAccessToken,
+      });
+
+      if (pageAssets.length === 0) {
+        throw new Error("No Facebook Pages were shared with this connection");
+      }
+
+      const pageNames = pageAssets.map((asset) => asset.name);
+      const facebookDisplayName =
+        pageNames.length === 1
+          ? pageNames[0]
+          : `${pageNames.length} Facebook Pages`;
+
+      await prisma.integration.update({
+        where: { id: integrationId },
+        data: { displayName: facebookDisplayName },
+      });
+
+      successMessage =
+        pageNames.length === 1
+          ? `Facebook Page "${pageNames[0]}" connected successfully!`
+          : `Facebook Pages ${pageNames.map((name) => `"${name}"`).join(", ")} connected successfully!`;
+    }
 
     /*
      * 10. Audit Logging
@@ -520,7 +586,9 @@ export async function GET(request: Request) {
      * 11. Notify parent window.
      */
     return popupResponse(
-      "META_OAUTH_SUCCESS"
+      "META_OAUTH_SUCCESS",
+      undefined,
+      successMessage
     );
 
   } catch (error: any) {

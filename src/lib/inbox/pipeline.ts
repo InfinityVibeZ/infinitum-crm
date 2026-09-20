@@ -828,6 +828,7 @@ export async function processInboxEvent(
     const newMessageEvent = buildNewMessageEvent({
       companyId,
       conversationId: txResult.conversationId,
+      channel: event.channel,
       messageId: txResult.messageId,
       content: event.text,
       contentType: event.contentType,

@@ -16,6 +16,7 @@ const PREVIEW_LENGTH = 160;
 export function buildNewMessageEvent(input: {
   companyId: string;
   conversationId: string;
+  channel?: string;
   messageId: string;
   content: string | null;
   contentType: string;
@@ -34,6 +35,7 @@ export function buildNewMessageEvent(input: {
     conversationId: input.conversationId,
     payload: {
       conversationId: input.conversationId,
+      channel: input.channel ?? null,
       messageId: input.messageId,
       direction: input.direction,
       contentType: input.contentType,

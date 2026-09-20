@@ -10,8 +10,6 @@ import {
   IconBrandFacebook,
   IconBrandInstagram,
   IconBrandWhatsapp,
-  IconChevronDown,
-  IconChevronUp,
 } from "@tabler/icons-react";
 import toast from "react-hot-toast";
 import { SkeletonHeader } from "@/components/ui/Skeleton";
@@ -61,52 +59,13 @@ export default function SettingsIntegrationsPage() {
     // Check URL params for OAuth results
     const params = new URLSearchParams(window.location.search);
     if (params.get("success")) {
-      toast.success("Integration connected successfully");
+      toast.success(params.get("message") || "Integration connected successfully");
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (params.get("error")) {
       toast.error(params.get("error") || "OAuth failed");
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
-
-  const [showAssetsFor, setShowAssetsFor] = useState<string | null>(null);
-  const [discoveredAssets, setDiscoveredAssets] = useState<any[]>([]);
-
-  const handleDiscoverAssets = async (integrationId: string) => {
-    setActionLoading(`discover-${integrationId}`);
-    try {
-      const res = await fetch(`/api/settings/integrations/${integrationId}/assets`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to discover assets");
-
-      setDiscoveredAssets(data.assets || []);
-      setShowAssetsFor(integrationId);
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleSaveAssets = async (integrationId: string) => {
-    setActionLoading(`save-assets-${integrationId}`);
-    try {
-      const res = await fetch(`/api/settings/integrations/${integrationId}/assets`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assets: discoveredAssets }) // Save all discovered for simplicity
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to save assets");
-
-      toast.success("Assets saved successfully!");
-      setShowAssetsFor(null);
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setActionLoading(null);
-    }
-  };
 
   const handleConnect = async (id: string, providerId: string, name: string, type: string) => {
     console.log(`handleConnect called for: id=${id}, providerId=${providerId}`);
@@ -144,13 +103,16 @@ export default function SettingsIntegrationsPage() {
             if (event.origin !== window.location.origin) return;
 
             if (event.data?.type === "META_OAUTH_SUCCESS") {
-              console.log("[Instagram OAuth] Parent received OAuth success");
+              console.log(`[${intent} OAuth] Parent received OAuth success`);
               window.removeEventListener("message", messageListener);
-              toast.success("Integration connected successfully!");
+              toast.success(
+                event.data?.message ||
+                `${intent === "instagram" ? "Instagram" : "Facebook"} connected successfully!`
+              );
               await fetchIntegrations();
               setActionLoading(null);
             } else if (event.data?.type === "META_OAUTH_ERROR") {
-              console.log("[Instagram OAuth] Parent received OAuth error", event.data?.error);
+              console.log(`[${intent} OAuth] Parent received OAuth error`, event.data?.error);
               window.removeEventListener("message", messageListener);
               toast.error(event.data?.error || "OAuth failed");
               setActionLoading(null);
@@ -357,16 +319,6 @@ export default function SettingsIntegrationsPage() {
                             <IconComponent size={28} stroke={1.5} />
                           </div>
 
-                          {/* Status Indicator */}
-                          <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5">
-                            <span className="relative flex h-2.5 w-2.5">
-                              {!isError && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-nexus-primary opacity-75"></span>}
-                              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isError ? 'bg-red-500' : 'bg-nexus-primary'}`}></span>
-                            </span>
-                            <span className={`text-[10px] font-bold tracking-wider uppercase ${isError ? 'text-red-400' : 'text-nexus-primary'}`}>
-                              {isError ? 'Error' : 'Active'}
-                            </span>
-                          </div>
                         </div>
 
                         {/* Title Section */}
@@ -417,48 +369,6 @@ export default function SettingsIntegrationsPage() {
                           </div>
                         </div>
 
-                        {/* Facebook Assets Management Slide-down */}
-                        {provider.providerId === "META" && provider.id === "FACEBOOK" && (
-                          <div className="mt-4">
-                            <button
-                              onClick={() => showAssetsFor === activeIntegration.id ? setShowAssetsFor(null) : handleDiscoverAssets(activeIntegration.id)}
-                              disabled={actionLoading === `discover-${activeIntegration.id}`}
-                              className="w-full flex justify-between items-center py-2 px-3 text-xs font-bold bg-white/5 text-white rounded-lg hover:bg-white/10 transition-all border border-white/5"
-                            >
-                              <span className="flex items-center gap-2">
-                                {actionLoading === `discover-${activeIntegration.id}` && <IconLoader2 size={14} className="animate-spin" />}
-                                Page Assets
-                              </span>
-                              {showAssetsFor === activeIntegration.id ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
-                            </button>
-
-                            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showAssetsFor === activeIntegration.id ? "max-h-96 opacity-100 mt-2" : "max-h-0 opacity-0"}`}>
-                              <div className="p-3 bg-black/50 border border-white/10 rounded-lg">
-                                {discoveredAssets.length === 0 ? (
-                                  <p className="text-[10px] text-nexus-muted italic text-center py-2">No assets discovered.</p>
-                                ) : (
-                                  <ul className="space-y-1.5 mb-3 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
-                                    {discoveredAssets.map((asset, i) => (
-                                      <li key={i} className="text-[10px] p-2 bg-white/5 border border-white/5 rounded flex justify-between items-center">
-                                        <span className="font-medium text-white truncate max-w-[120px]">{asset.name}</span>
-                                        <span className="px-1.5 py-0.5 bg-white/10 rounded text-[9px] uppercase">{asset.type}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                                <div className="flex justify-end">
-                                  <button
-                                    onClick={() => handleSaveAssets(activeIntegration.id)}
-                                    disabled={actionLoading === `save-assets-${activeIntegration.id}`}
-                                    className="w-full py-1.5 text-[10px] bg-white text-black font-bold rounded hover:bg-gray-200 transition-colors disabled:opacity-50"
-                                  >
-                                    {actionLoading === `save-assets-${activeIntegration.id}` ? "Saving..." : "Save All"}
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </div>
                   );

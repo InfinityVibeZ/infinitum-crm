@@ -162,7 +162,12 @@ export default function InboxPage() {
         );
 
         if (!conversationsRef.current.some((conversation) => conversation.id === conversationId)) {
-          void fetch(`/api/inbox/conversations?filter=channel&channel=INSTAGRAM`, {
+          const eventChannel = typeof event.channel === "string" ? event.channel : "";
+          const recoveryUrl = eventChannel
+            ? `/api/inbox/conversations?filter=channel&channel=${encodeURIComponent(eventChannel)}`
+            : "/api/inbox/conversations";
+
+          void fetch(recoveryUrl, {
             cache: "no-store",
           })
             .then((response) => (response.ok ? response.json() : null))
@@ -657,7 +662,7 @@ export default function InboxPage() {
     if (hours < 24) return `${hours}h`;
     const days = Math.floor(hours / 24);
     if (days < 7) return `${days}d`;
-    return new Date(iso).toLocaleDateString("en-US", { timeZone: "UTC" });
+    return new Date(iso).toLocaleDateString("en-US");
   };
 
   // UI-only: full date separator label between messages.
@@ -667,17 +672,16 @@ export default function InboxPage() {
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
 
-    const utcDate = d.toLocaleDateString("en-US", { timeZone: "UTC" });
-    const utcToday = today.toLocaleDateString("en-US", { timeZone: "UTC" });
-    const utcYesterday = yesterday.toLocaleDateString("en-US", { timeZone: "UTC" });
+    const localDate = d.toLocaleDateString("en-US");
+    const localToday = today.toLocaleDateString("en-US");
+    const localYesterday = yesterday.toLocaleDateString("en-US");
 
-    if (utcDate === utcToday) return "Today";
-    if (utcDate === utcYesterday) return "Yesterday";
+    if (localDate === localToday) return "Today";
+    if (localDate === localYesterday) return "Yesterday";
     return d.toLocaleDateString("en-US", {
-      timeZone: "UTC",
       month: "short",
       day: "numeric",
-      year: d.getUTCFullYear() === today.getUTCFullYear() ? undefined : "numeric",
+      year: d.getFullYear() === today.getFullYear() ? undefined : "numeric",
     });
   };
 
@@ -1025,10 +1029,10 @@ export default function InboxPage() {
                                 : "text-nexus-muted"
                             }`}
                           >
-                            {lastMsg?.content
+                            {(lastMsg?.content || conv.metadata?.lastMessagePreview)
                               ? `${
                                   isOutboundPreview ? "You: " : ""
-                                }${lastMsg.content}`
+                                }${lastMsg?.content || conv.metadata.lastMessagePreview}`
                               : "No messages yet"}
                           </p>
                         </div>
@@ -1264,8 +1268,8 @@ export default function InboxPage() {
                   const prev = idx > 0 ? messagesToRender[idx - 1] : null;
                   const showDateSep =
                     !prev ||
-                    new Date(prev.created_at).toLocaleDateString("en-US", { timeZone: "UTC" }) !==
-                      new Date(msg.created_at).toLocaleDateString("en-US", { timeZone: "UTC" });
+                    new Date(prev.created_at).toLocaleDateString("en-US") !==
+                      new Date(msg.created_at).toLocaleDateString("en-US");
 
                   return (
                     <div
@@ -1328,7 +1332,6 @@ export default function InboxPage() {
                             )}
                             <time dateTime={msg.created_at}>
                               {new Date(msg.created_at).toLocaleTimeString("en-US", {
-                                timeZone: "UTC",
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })}
