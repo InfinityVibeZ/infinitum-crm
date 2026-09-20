@@ -3,12 +3,15 @@ import { requireAuthenticatedUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getIntegrationCredentials } from "@/lib/integrations";
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const authCheck = await requireAuthenticatedUser(request, ["ADMIN", "SUPER_ADMIN"]);
   if (authCheck instanceof Response) return authCheck;
 
   const { payload } = authCheck;
-  const integrationId = params.id;
+  const { id: integrationId } = await params;
 
   try {
     const integration = await prisma.integration.findFirst({
@@ -17,7 +20,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
         companyId: payload.companyId, // Tenant isolation check
       }
     });
-
+    console.log("ASSET DISCOVERY DEBUG:", {
+      integrationId,
+      companyId: payload.companyId,
+      foundIntegration: !!integration,
+      provider: integration?.provider,
+      status: integration?.status,
+      isActive: integration?.isActive,
+    });
     if (!integration) {
       return new NextResponse(JSON.stringify({ error: "Integration not found" }), { status: 404 });
     }
@@ -89,12 +99,15 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const authCheck = await requireAuthenticatedUser(request, ["ADMIN", "SUPER_ADMIN"]);
   if (authCheck instanceof Response) return authCheck;
 
   const { payload } = authCheck;
-  const integrationId = params.id;
+  const { id: integrationId } = await params;
 
   try {
     const body = await request.json();
@@ -116,6 +129,27 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     const savedAssets = [];
+    const credentials = await getIntegrationCredentials(
+      integrationId,
+      payload.companyId!
+    );
+
+    if (!credentials) {
+      return NextResponse.json(
+        { error: "No Meta credentials found" },
+        { status: 400 }
+      );
+    }
+
+    const accessToken =
+      credentials.accessToken || credentials.access_token;
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: "No Meta access token available" },
+        { status: 400 }
+      );
+    }
 
     // Safely upsert each asset to avoid unique constraint violations on re-saves
     for (const asset of assets) {
@@ -144,6 +178,63 @@ export async function POST(request: Request, { params }: { params: { id: string 
         }
       });
       savedAssets.push(saved);
+      if (asset.type === "PAGE") {
+        const pageTokenResponse = await fetch(
+          `https://graph.facebook.com/v19.0/me/accounts?fields=id,access_token&access_token=${encodeURIComponent(
+            accessToken
+          )}`
+        );
+
+        const pageTokenData = await pageTokenResponse.json();
+
+        if (!pageTokenResponse.ok) {
+          throw new Error(
+            pageTokenData.error?.message ||
+            "Failed to retrieve Facebook Page access token"
+          );
+        }
+
+        const page = (pageTokenData.data || []).find(
+          (p: any) => p.id === asset.externalId
+        );
+
+        if (!page?.access_token) {
+          throw new Error(
+            `No Page access token found for Facebook Page ${asset.externalId}`
+          );
+        }
+
+        const pageAccessToken = page.access_token;
+        const subscribeResponse = await fetch(
+          `https://graph.facebook.com/v19.0/${asset.externalId}/subscribed_apps`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              access_token: pageAccessToken,
+              subscribed_fields: "messages",
+            }),
+          }
+        );
+
+        const subscribeData = await subscribeResponse.json();
+
+        console.log("[META PAGE SUBSCRIPTION]", {
+          pageId: asset.externalId,
+          status: subscribeResponse.status,
+          ok: subscribeResponse.ok,
+          response: subscribeData,
+        });
+
+        if (!subscribeResponse.ok) {
+          throw new Error(
+            subscribeData.error?.message ||
+            "Failed to subscribe Meta Page to webhook"
+          );
+        }
+      }
     }
 
     return NextResponse.json({ success: true, assets: savedAssets });

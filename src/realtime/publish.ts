@@ -45,7 +45,7 @@ export async function publishRealtimeEvent(event: RealtimeEvent): Promise<void> 
     const publishUrl =
       process.env.REALTIME_PUBLISH_URL ||
       (process.env.REALTIME_PORT
-        ? `http://127.0.0.1:${process.env.REALTIME_PORT}/publish`
+        ? `https://127.0.0.1:${process.env.REALTIME_PORT}/publish`
         : "");
     if (publishUrl) {
       console.log("[realtime-debug] publish POST starting", {

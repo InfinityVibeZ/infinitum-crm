@@ -1,30 +1,51 @@
-/**
- * Lazy singleton access to the RealtimeHub.
- *
- * The hub is only started when REALTIME_ENABLED=true; otherwise this is a
- * no-op so the application runs identically without realtime.
- */
 import type http from "http";
 import { loadRealtimeConfig } from "./config";
 import { RealtimeHub } from "./hub";
 
-let hub: RealtimeHub | null = null;
+const GLOBAL_HUB_KEY = "__CRM_REALTIME_HUB__";
+
+type GlobalWithRealtimeHub = typeof globalThis & {
+  __CRM_REALTIME_HUB__?: RealtimeHub;
+};
+
+const globalState = globalThis as GlobalWithRealtimeHub;
 
 export function getRealtimeHub(): RealtimeHub | null {
-  return hub;
+  return globalState[GLOBAL_HUB_KEY] ?? null;
 }
 
-export async function startRealtimeHub(existingServer?: http.Server): Promise<RealtimeHub | null> {
+export function setRealtimeHub(instance: RealtimeHub): void {
+  globalState[GLOBAL_HUB_KEY] = instance;
+}
+
+export async function startRealtimeHub(
+  existingServer?: http.Server,
+): Promise<RealtimeHub | null> {
   const config = loadRealtimeConfig();
-  if (!config.enabled) return null;
-  if (!hub) hub = new RealtimeHub(config);
-  if (!hub.running) await hub.start(existingServer);
-  return hub;
+
+  if (!config.enabled) {
+    return null;
+  }
+
+  let current = getRealtimeHub();
+
+  if (!current) {
+    current = new RealtimeHub(config);
+    setRealtimeHub(current);
+  }
+
+  if (!current.running) {
+    await current.start(existingServer);
+  }
+
+  return current;
 }
 
 export async function stopRealtimeHub(): Promise<void> {
-  if (hub) {
-    await hub.stop();
-    hub = null;
+  const current = getRealtimeHub();
+
+  if (current) {
+    await current.stop();
+    globalState[GLOBAL_HUB_KEY] = undefined;
   }
 }

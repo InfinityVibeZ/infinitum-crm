@@ -32,7 +32,7 @@
 
 import { prisma } from "../prisma";
 import { decrypt } from "@/lib/encryption";
-import { getInstagramUserProfile } from "../integrations/providers/meta";
+import { getInstagramUserProfile, getFacebookUserProfile } from "../integrations/providers/meta";
 import { resolveContactIdentity } from "../integrations/identity-service";
 import type {
   NormalizedInboxEvent,
@@ -150,7 +150,14 @@ export async function processInboxEvent(
       profilePictureUrl?: string;
     }
     | null = null;
-
+  let facebookProfile:
+    | {
+      id: string;
+      username?: string;
+      name?: string;
+      profilePictureUrl?: string;
+    }
+    | null = null;
   if (
     event.provider === "INSTAGRAM" &&
     event.channel === "INSTAGRAM"
@@ -206,6 +213,60 @@ export async function processInboxEvent(
       );
     }
   }
+  if (
+    event.provider === "META" &&
+    event.channel === "FACEBOOK"
+  ) {
+    try {
+      const credentialsRecord =
+        await prisma.integrationCredential.findUnique({
+          where: {
+            integrationId: event.integrationId,
+          },
+          select: {
+            encryptedData: true,
+          },
+        });
+
+      if (credentialsRecord?.encryptedData) {
+        const decryptedData = decrypt(
+          credentialsRecord.encryptedData
+        );
+
+        const credentials =
+          typeof decryptedData === "string"
+            ? JSON.parse(decryptedData)
+            : decryptedData;
+
+        facebookProfile =
+          await getFacebookUserProfile(
+            credentials,
+            event.externalSenderId,
+            event.externalConversationId?.split("_")[0] || ""
+          );
+
+        if (facebookProfile) {
+          console.log("[Inbox] Facebook sender profile resolved:", {
+            senderId: event.externalSenderId,
+            name: facebookProfile.name ?? null,
+            username: facebookProfile.username ?? null,
+            hasProfilePicture:
+              !!facebookProfile.profilePictureUrl,
+          });
+        }
+      }
+    } catch (error) {
+      console.warn(
+        "[Inbox] Facebook profile enrichment failed; continuing:",
+        error instanceof Error
+          ? error.message
+          : String(error)
+      );
+    }
+  }
+
+
+
 
   // ───────────────────────────────────────────────────────────────────────────
   // Step 3: Resolve Contact via identity engine
@@ -214,6 +275,11 @@ export async function processInboxEvent(
   const instagramDisplayName =
     instagramProfile?.name ||
     instagramProfile?.username ||
+    null;
+
+  const facebookDisplayName =
+    facebookProfile?.name ||
+    facebookProfile?.username ||
     null;
 
   const identityResult = await resolveContactIdentity(prisma, {
@@ -225,6 +291,7 @@ export async function processInboxEvent(
     contactData: {
       name:
         instagramDisplayName ||
+        facebookDisplayName ||
         `${event.channel} User`,
 
       customFields:
@@ -313,9 +380,9 @@ export async function processInboxEvent(
           where: { id: contactId },
           data: {
             ...(instagramDisplayName &&
-            (!existingContact.name ||
-              existingContact.name === "INSTAGRAM User" ||
-              existingContact.name === "Unknown")
+              (!existingContact.name ||
+                existingContact.name === "INSTAGRAM User" ||
+                existingContact.name === "Unknown")
               ? { name: instagramDisplayName }
               : {}),
             customFields: {
