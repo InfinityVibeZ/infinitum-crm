@@ -13,7 +13,12 @@ require("tsconfig-paths").register({
   paths: { "@/*": ["src/*"] },
 });
 
-const { getRealtimeHub, startRealtimeHub, stopRealtimeHub } = require("./src/realtime/server");
+const {
+  getRealtimeHub,
+  startRealtimeHub,
+  stopRealtimeHub,
+  setRealtimeHub,
+} = require("./src/realtime/server");
 
 async function main() {
   const dev = process.env.NODE_ENV === "development" || process.argv.includes("--dev");
@@ -28,9 +33,9 @@ async function main() {
   };
   const httpServer = useHttps
     ? https.createServer(
-        { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) },
-        requestHandler
-      )
+      { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) },
+      requestHandler
+    )
     : http.createServer(requestHandler);
 
   const app = next({
@@ -41,8 +46,16 @@ async function main() {
   });
   handle = app.getRequestHandler();
   await app.prepare();
-  await startRealtimeHub(httpServer);
+  const realtimeHub = await startRealtimeHub(httpServer);
 
+  if (realtimeHub) {
+    setRealtimeHub(realtimeHub);
+  }
+
+  console.log("[server] realtime hub state", {
+    exists: !!realtimeHub,
+    running: !!realtimeHub?.running,
+  });
   const port = Number(process.env.PORT || "3000");
   httpServer.listen(port, () => {
     console.log(

@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     const auth = await requireAuthenticatedUser(request);
     if (auth instanceof Response) return auth;
     const { payload, user } = auth;
-    
+
     if (!user.companyId) {
       return NextResponse.json({ error: "No company associated with user" }, { status: 403 });
     }
@@ -19,6 +19,7 @@ export async function GET(request: Request) {
     const integrations = await prisma.integration.findMany({
       where: {
         companyId: user.companyId,
+        isActive: true,
       },
       select: {
         id: true,
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
     return NextResponse.json(safeIntegration, { status: 201 });
   } catch (error: any) {
     console.error("POST /api/settings/integrations error:", error);
-    
+
     await logAuditEvent({
       action: "INTEGRATION_FAILED",
       category: "Settings",

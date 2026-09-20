@@ -6,11 +6,16 @@ import { getProvider } from "@/lib/integrations/provider-registry";
 import { getIntegrationCredentials } from "@/lib/integrations";
 
 // GET /api/settings/integrations/[id]
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const auth = await requireAuthenticatedUser(request);
     if (auth instanceof Response) return auth;
     const { payload, user } = auth;
+    const { id } = await params;
+    console.log("[DISCONNECT DEBUG]", {
+      requestedId: id,
+      companyId: user.companyId,
+    });
 
     if (!user.companyId) {
       return NextResponse.json({ error: "No company associated with user" }, { status: 403 });
@@ -18,23 +23,16 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     const integration = await prisma.integration.findFirst({
       where: {
-        id: params.id,
+        id: id,
         companyId: user.companyId,
       },
-      select: {
-        id: true,
-        provider: true,
-        type: true,
-        externalId: true,
-        displayName: true,
-        status: true,
-        connectionMeta: true,
-        lastSyncAt: true,
-        errorMessage: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      }
+    });
+
+    console.log("[DISCONNECT DEBUG] FOUND INTEGRATION", {
+      id: integration?.id,
+      provider: integration?.provider,
+      externalId: integration?.externalId,
+      displayName: integration?.displayName,
     });
 
     if (!integration) {
@@ -56,14 +54,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
 // Disconnect integration without deleting historical data.
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
-) {
+{ params }: { params: Promise<{ id: string }> }) {
   try {
     const auth = await requireAuthenticatedUser(request);
 
     if (auth instanceof Response) return auth;
 
     const { payload, user } = auth;
+    const { id } = await params;
 
     if (!user.companyId) {
       return NextResponse.json(
@@ -84,7 +82,7 @@ export async function DELETE(
 
     const integration = await prisma.integration.findFirst({
       where: {
-        id: params.id,
+        id: id,
         companyId: user.companyId,
       },
     });

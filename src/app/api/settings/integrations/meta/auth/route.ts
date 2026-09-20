@@ -124,7 +124,7 @@ export async function GET(request: Request) {
     //
     // The redirect URI is derived from the CURRENT REQUEST ORIGIN.
     //
-  
+
     // Cloudflare:
     // https://lung-ppc-nest-andy.trycloudflare.com
     // ->
@@ -394,6 +394,8 @@ export async function GET(request: Request) {
       const scopesList = [
         "pages_show_list",
         "pages_read_engagement",
+        "pages_manage_metadata",
+        "pages_messaging",
       ];
 
       const scopes =

@@ -232,11 +232,113 @@ export async function getInstagramUserProfile(
             ? data.profile_picture_url
             : typeof data?.profilePictureUrl === "string"
               ? data.profilePictureUrl
-          : undefined,
+              : undefined,
     };
   } catch (error) {
     console.warn("[Instagram Profile] Lookup exception:", {
       userId: instagramUserId,
+      error:
+        error instanceof Error
+          ? error.message
+          : String(error),
+    });
+
+    return null;
+  }
+}
+export async function getFacebookUserProfile(
+  credentials: any,
+  facebookUserId: string,
+  pageId: string
+): Promise<{
+  id: string;
+  username?: string;
+  name?: string;
+  profilePictureUrl?: string;
+} | null> {
+  const userAccessToken =
+    credentials?.accessToken ||
+    credentials?.access_token;
+
+  if (!userAccessToken || !facebookUserId || !pageId) {
+    return null;
+  }
+
+  try {
+    // 1. Get the Page access token using the connected Facebook user token
+    const pagesResponse = await fetch(
+      `https://graph.facebook.com/v19.0/me/accounts` +
+      `?fields=id,access_token` +
+      `&access_token=${encodeURIComponent(userAccessToken)}`
+    );
+
+    const pagesData = await pagesResponse.json();
+
+    if (!pagesResponse.ok) {
+      console.warn("[Facebook Profile] Failed to get Page token:", {
+        status: pagesResponse.status,
+        message: pagesData?.error?.message ?? null,
+      });
+
+      return null;
+    }
+
+    const page = Array.isArray(pagesData?.data)
+      ? pagesData.data.find(
+        (item: any) => String(item?.id) === String(pageId)
+      )
+      : null;
+
+    const pageAccessToken = page?.access_token;
+
+    if (!pageAccessToken) {
+      console.warn("[Facebook Profile] Page access token not found:", {
+        pageId,
+      });
+
+      return null;
+    }
+
+    // 2. Use the Page access token to resolve the Messenger user
+    const profileResponse = await fetch(
+      `https://graph.facebook.com/v19.0/${encodeURIComponent(
+        facebookUserId
+      )}` +
+      `?fields=id,name,username,profile_pic` +
+      `&access_token=${encodeURIComponent(pageAccessToken)}`
+    );
+
+    const data = await profileResponse.json();
+
+    if (!profileResponse.ok) {
+      console.warn("[Facebook Profile] User lookup failed:", {
+        status: profileResponse.status,
+        userId: facebookUserId,
+        errorCode: data?.error?.code ?? null,
+        message: data?.error?.message ?? null,
+      });
+
+      return null;
+    }
+
+    return {
+      id: data?.id || facebookUserId,
+      name:
+        typeof data?.name === "string"
+          ? data.name
+          : undefined,
+      username:
+        typeof data?.username === "string"
+          ? data.username
+          : undefined,
+      profilePictureUrl:
+        typeof data?.profile_pic === "string"
+          ? data.profile_pic
+          : undefined,
+    };
+  } catch (error) {
+    console.warn("[Facebook Profile] Lookup exception:", {
+      userId: facebookUserId,
       error:
         error instanceof Error
           ? error.message
