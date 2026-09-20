@@ -190,19 +190,27 @@ export default function InboxPage() {
 
       // Conversation metadata changed (status/ordering).
       onConversationUpdated: (event) => {
-        setConversations((prev) =>
-          applyConversationUpdated(prev, {
-            conversationId:
-              typeof event.conversationId === "string" ? event.conversationId : "",
-            status: typeof event.status === "string" ? event.status : undefined,
-            lastMessageAt:
-              typeof event.lastMessageAt === "string" ? event.lastMessageAt : undefined,
-            lastMessagePreview:
-              typeof event.lastMessagePreview === "string" ? event.lastMessagePreview : undefined,
-            profilePictureUrl:
-              typeof event.profilePictureUrl === "string" ? event.profilePictureUrl : undefined,
-          })
-        );
+        const update = {
+          conversationId:
+            typeof event.conversationId === "string" ? event.conversationId : "",
+          status: typeof event.status === "string" ? event.status : undefined,
+          lastMessageAt:
+            typeof event.lastMessageAt === "string" ? event.lastMessageAt : undefined,
+          lastMessagePreview:
+            typeof event.lastMessagePreview === "string" ? event.lastMessagePreview : undefined,
+          profilePictureUrl:
+            event.profilePictureUrl === null
+              ? null
+              : typeof event.profilePictureUrl === "string"
+                ? event.profilePictureUrl
+                : undefined,
+        };
+
+        setConversations((prev) => applyConversationUpdated(prev, update));
+        setSelectedConversation((prev) => {
+          if (!prev || prev.id !== update.conversationId) return prev;
+          return applyConversationUpdated([prev], update)[0] ?? prev;
+        });
       },
 
       // Our own outbound message (echoed from another tab). Never duplicate —
@@ -542,9 +550,9 @@ export default function InboxPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 
-  // Only Instagram conversations with an active integration can send.
+  // Instagram and Facebook conversations with an active integration can send.
   const canSend = (conv: Conversation) =>
-    conv.channel.toUpperCase() === "INSTAGRAM" &&
+    ["INSTAGRAM", "FACEBOOK"].includes(conv.channel.toUpperCase()) &&
     !!conv.integration?.id &&
     conv.integration?.isActive !== false;
 
@@ -883,24 +891,45 @@ export default function InboxPage() {
               [
                 { key: "all", label: "All" },
                 { key: "unread", label: "Unread" },
-                { key: "channel", label: "Instagram" },
+                { key: "channel", label: "Instagram", channel: "INSTAGRAM" },
+                { key: "channel", label: "Facebook", channel: "FACEBOOK" },
               ] as const
             ).map((tab) => {
-              const active = filter === tab.key;
+              const channelTab = tab.key === "channel" ? tab.channel : null;
+              const active =
+                tab.key === "all"
+                  ? filter === "all"
+                  : tab.key === "unread"
+                    ? filter === "unread"
+                    : filter === "channel" && channel === channelTab;
+
               return (
                 <button
-                  key={tab.key}
+                  key={`${tab.key}-${tab.label}`}
                   role="tab"
                   aria-selected={active}
-                  onClick={() => setFilter(tab.key)}
+                  onClick={() => {
+                    if (tab.key === "channel") {
+                      setChannel(tab.channel);
+                      setFilter("channel");
+                      return;
+                    }
+                    setFilter(tab.key);
+                  }}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
                     active
                       ? "bg-blue-600/90 border-blue-500/60 text-white"
                       : "bg-transparent border-nexus-border text-nexus-muted hover:text-nexus-text hover:bg-nexus-hover"
                   }`}
                 >
-                  {tab.key === "channel" && (
+                  {tab.key === "channel" && tab.channel === "INSTAGRAM" && (
                     <IconBrandInstagram
+                      size={12}
+                      className="inline-block mr-1 -mt-0.5"
+                    />
+                  )}
+                  {tab.key === "channel" && tab.channel === "FACEBOOK" && (
+                    <IconBrandFacebook
                       size={12}
                       className="inline-block mr-1 -mt-0.5"
                     />
@@ -1398,11 +1427,11 @@ export default function InboxPage() {
               ) : (
                 <div
                   className="flex items-center gap-2 opacity-50 cursor-not-allowed"
-                  title="Outbound messaging only supported for Instagram conversations"
+                  title="Outbound messaging is unavailable for this conversation"
                 >
                   <input
                     type="text"
-                    placeholder="Outbound messaging only supported for Instagram conversations"
+                    placeholder="Outbound messaging is unavailable for this conversation"
                     aria-label="Messaging unavailable for this channel"
                     className="flex-1 bg-nexus-bg border border-nexus-border rounded-xl px-3.5 py-2.5 text-sm text-nexus-text outline-none"
                     disabled

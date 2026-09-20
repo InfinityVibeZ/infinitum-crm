@@ -308,6 +308,19 @@ export async function processInboxEvent(
                 instagramProfile.profilePictureUrl ?? null,
             },
           }
+          : facebookProfile
+            ? {
+              facebook: {
+                username:
+                  facebookProfile.username ?? null,
+                name:
+                  facebookProfile.name ?? null,
+                externalId:
+                  facebookProfile.id,
+                profilePictureUrl:
+                  facebookProfile.profilePictureUrl ?? null,
+              },
+            }
           : undefined,
     },
   });
@@ -414,6 +427,79 @@ export async function processInboxEvent(
               !!instagramProfile.profilePictureUrl,
           }
         );
+      }
+    }
+  }
+
+  if (
+    event.provider === "META" &&
+    event.channel === "FACEBOOK" &&
+    facebookProfile
+  ) {
+    const facebookDisplayName =
+      facebookProfile.name ||
+      facebookProfile.username;
+
+    if (facebookDisplayName || facebookProfile.profilePictureUrl) {
+      const existingContact =
+        await prisma.contact.findUnique({
+          where: {
+            id: contactId,
+          },
+          select: {
+            id: true,
+            name: true,
+            customFields: true,
+          },
+        });
+
+      if (existingContact) {
+        const existingCustomFields =
+          existingContact.customFields &&
+            typeof existingContact.customFields === "object" &&
+            !Array.isArray(existingContact.customFields)
+            ? existingContact.customFields
+            : {};
+
+        const existingFacebook =
+          existingCustomFields.facebook &&
+            typeof existingCustomFields.facebook === "object" &&
+            !Array.isArray(existingCustomFields.facebook)
+            ? existingCustomFields.facebook
+            : {};
+
+        await prisma.contact.update({
+          where: { id: contactId },
+          data: {
+            ...(facebookDisplayName &&
+              (!existingContact.name ||
+                existingContact.name === "FACEBOOK User" ||
+                existingContact.name === "Unknown")
+              ? { name: facebookDisplayName }
+              : {}),
+            customFields: {
+              ...existingCustomFields,
+              facebook: {
+                ...existingFacebook,
+                username: facebookProfile.username ?? null,
+                name: facebookProfile.name ?? null,
+                externalId: facebookProfile.id,
+                profilePictureUrl:
+                  facebookProfile.profilePictureUrl ??
+                  existingFacebook.profilePictureUrl ??
+                  null,
+              },
+            },
+          },
+        });
+
+        console.log("[Inbox] Facebook contact enriched:", {
+          contactId,
+          name: facebookDisplayName,
+          username: facebookProfile.username ?? null,
+          externalId: facebookProfile.id,
+          hasProfilePicture: !!facebookProfile.profilePictureUrl,
+        });
       }
     }
   }
@@ -881,7 +967,10 @@ export async function processInboxEvent(
         ? event.text.slice(0, 160)
         : null,
       lastMessageDirection: event.direction,
-      profilePictureUrl: instagramProfile?.profilePictureUrl ?? null,
+      profilePictureUrl:
+        instagramProfile?.profilePictureUrl ??
+        facebookProfile?.profilePictureUrl ??
+        null,
     });
 
     console.log(

@@ -162,6 +162,158 @@ export async function sendInstagramMessage(
   }
 }
 
+export async function sendFacebookMessage(
+  credentials: any,
+  pageId: string,
+  recipientMessengerId: string,
+  text: string
+): Promise<
+  | { ok: true; externalMessageId: string }
+  | { ok: false; errorCode?: string; errorMessage?: string }
+> {
+  const userAccessToken =
+    credentials?.accessToken ||
+    credentials?.access_token;
+
+  if (!userAccessToken || !pageId || !recipientMessengerId || !text) {
+    return {
+      ok: false,
+      errorCode: "MISSING_INPUTS",
+      errorMessage: "Missing Facebook user token, Page ID, recipient ID, or message text",
+    };
+  }
+
+  try {
+    const pagesResponse = await fetch(
+      "https://graph.facebook.com/v19.0/me/accounts" +
+      "?fields=id,access_token" +
+      `&access_token=${encodeURIComponent(userAccessToken)}`
+    );
+
+    const pagesData = await pagesResponse.json();
+
+    if (!pagesResponse.ok) {
+      console.warn("[Facebook Send] Failed to resolve Page access token:", {
+        status: pagesResponse.status,
+        message: pagesData?.error?.message ?? null,
+      });
+
+      return {
+        ok: false,
+        errorCode:
+          pagesData?.error?.code != null
+            ? String(pagesData.error.code)
+            : String(pagesResponse.status),
+        errorMessage:
+          typeof pagesData?.error?.message === "string"
+            ? pagesData.error.message
+            : "Failed to resolve Facebook Page access token",
+      };
+    }
+
+    const page = Array.isArray(pagesData?.data)
+      ? pagesData.data.find(
+          (item: any) => String(item?.id) === String(pageId)
+        )
+      : null;
+
+    const pageAccessToken = page?.access_token;
+
+    if (!pageAccessToken) {
+      console.warn("[Facebook Send] Page access token missing:", {
+        pageId,
+      });
+
+      return {
+        ok: false,
+        errorCode: "PAGE_ACCESS_TOKEN_MISSING",
+        errorMessage: `No Page access token found for Facebook Page ${pageId}`,
+      };
+    }
+
+    const response = await fetch(
+      `https://graph.facebook.com/v19.0/${encodeURIComponent(pageId)}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipient: { id: recipientMessengerId },
+          message: { text },
+          access_token: pageAccessToken,
+        }),
+      }
+    );
+
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      console.warn("[Facebook Send] Provider rejected message:", {
+        status: response.status,
+        pageId,
+        recipientMessengerId,
+        errorCode: data?.error?.code ?? data?.code ?? null,
+        errorType: data?.error?.type ?? null,
+        message: data?.error?.message ?? null,
+      });
+
+      return {
+        ok: false,
+        errorCode:
+          data?.error?.code != null
+            ? String(data.error.code)
+            : String(response.status),
+        errorMessage:
+          typeof data?.error?.message === "string"
+            ? data.error.message
+            : "Provider rejected the message",
+      };
+    }
+
+    const externalMessageId =
+      typeof data?.message_id === "string"
+        ? data.message_id
+        : null;
+
+    if (!externalMessageId) {
+      console.warn(
+        "[Facebook Send] Provider accepted but returned no message_id"
+      );
+      return {
+        ok: false,
+        errorCode: "NO_MESSAGE_ID",
+        errorMessage: "Provider accepted the message but returned no message_id",
+      };
+    }
+
+    return { ok: true, externalMessageId };
+  } catch (error) {
+    console.warn("[Facebook Send] Network failure while sending message:", {
+      pageId,
+      recipientMessengerId,
+      error:
+        error instanceof Error
+          ? error.message
+          : String(error),
+    });
+
+    return {
+      ok: false,
+      errorCode: "NETWORK_ERROR",
+      errorMessage:
+        error instanceof Error
+          ? error.message
+          : "Network failure while sending message",
+    };
+  }
+}
+
 /**
  * Fetches the Instagram profile for a message sender.
  *
@@ -290,6 +442,7 @@ export async function getFacebookUserProfile(
       : null;
 
     const pageAccessToken = page?.access_token;
+    const hasPageAccessToken = !!pageAccessToken;
 
     if (!pageAccessToken) {
       console.warn("[Facebook Profile] Page access token not found:", {
@@ -304,7 +457,7 @@ export async function getFacebookUserProfile(
       `https://graph.facebook.com/v19.0/${encodeURIComponent(
         facebookUserId
       )}` +
-      `?fields=id,name,username,profile_pic` +
+      `?fields=id,name,username,picture{url},profile_pic` +
       `&access_token=${encodeURIComponent(pageAccessToken)}`
     );
 
@@ -314,12 +467,32 @@ export async function getFacebookUserProfile(
       console.warn("[Facebook Profile] User lookup failed:", {
         status: profileResponse.status,
         userId: facebookUserId,
+        pageId,
         errorCode: data?.error?.code ?? null,
         message: data?.error?.message ?? null,
       });
 
       return null;
     }
+
+    const profilePictureUrl =
+      typeof data?.profile_pic === "string"
+        ? data.profile_pic
+        : typeof data?.picture?.data?.url === "string"
+          ? data.picture.data.url
+          : undefined;
+
+    console.log("[Facebook Profile Debug]", {
+      senderId: facebookUserId,
+      pageId,
+      hasPageAccessToken,
+      profileResponse: {
+        id: data?.id ?? null,
+        name: data?.name ?? null,
+        username: data?.username ?? null,
+        profilePictureUrl: profilePictureUrl ?? null,
+      },
+    });
 
     return {
       id: data?.id || facebookUserId,
@@ -331,10 +504,7 @@ export async function getFacebookUserProfile(
         typeof data?.username === "string"
           ? data.username
           : undefined,
-      profilePictureUrl:
-        typeof data?.profile_pic === "string"
-          ? data.profile_pic
-          : undefined,
+      profilePictureUrl,
     };
   } catch (error) {
     console.warn("[Facebook Profile] Lookup exception:", {

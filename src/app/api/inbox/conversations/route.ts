@@ -205,12 +205,12 @@ export async function GET(req: NextRequest) {
         !Array.isArray(customFields)
           ? (customFields as Record<string, unknown>)
           : null;
-      const instagramValue = customFieldsObject?.["instagram"];
-      const instagram =
-        instagramValue &&
-        typeof instagramValue === "object" &&
-        !Array.isArray(instagramValue)
-          ? (instagramValue as Record<string, unknown>)
+      const channelValue = customFieldsObject?.[conversation.channel.toLowerCase()];
+      const channelProfile =
+        channelValue &&
+        typeof channelValue === "object" &&
+        !Array.isArray(channelValue)
+          ? (channelValue as Record<string, unknown>)
           : null;
 
       return {
@@ -218,8 +218,8 @@ export async function GET(req: NextRequest) {
         contact: {
           ...conversation.contact,
           avatarUrl:
-            typeof instagram?.profilePictureUrl === "string"
-              ? instagram.profilePictureUrl
+            typeof channelProfile?.profilePictureUrl === "string"
+              ? channelProfile.profilePictureUrl
               : null,
         },
       };
